@@ -121,16 +121,19 @@ UIの可視化要件（多角的分析・イントラデイ詳細）を満たす
 
 ### 6.1 `Daily_Asset_Snapshot` (日次資産スナップショット)
 毎日の資産状態を記録し、月次・年次のポートフォリオ成長曲線の描画に使用する。
+銀行口座と証券口座は独立プールとして別カラム管理 (REQUIREMENTS_DEFINITION.md §2.2)。
 
 | カラム名 | 型 | 説明 |
 | :--- | :--- | :--- |
 | `date` | Date | 記録日 (PK) |
-| `bank_balance` | BigInt | 銀行預金残高（生活防衛費含む） |
-| `trust_value` | BigInt | 投資信託 評価額 |
-| `long_solid_value` | BigInt | 長期（堅実コア）評価額 |
-| `long_growth_value` | BigInt | 長期（成長サテライト）評価額 |
-| `short_term_capital`| BigInt | 短期枠 元本（利益再投資分を含む） |
-| `cumulative_transfer`| BigInt | 短期枠から投資信託への累計振替額 |
+| `bank_balance` | BigInt | **銀行口座残高** (生活防衛費含む) ※読取専用、API: OpenCanvas |
+| `buying_power` | BigInt | **証券口座 現金** (買付余力 = 未投入資金)。下限なし (投資機会がなければ100%現金保持も許容) |
+| `trust_value` | BigInt | 投資信託 (Passive Core) 評価額 |
+| `long_solid_value` | BigInt | 長期コア 評価額 |
+| `long_growth_value` | BigInt | 長期サテライト 評価額 |
+| `short_term_capital` | BigInt | 短期枠 **元本** (利益再投資分を含む) |
+| `short_term_market_value` | BigInt | 短期枠 **評価額** (元本との差が含み損益) |
+| `cumulative_sweep_to_long_solid` | BigInt | 短期枠から **長期コア** への累計 Profit Sweep 額 (旧 `cumulative_transfer` から振替先変更に伴い改名) |
 
 ### 6.2 `Trade_Tick_Log` (短期トレード用ログ)
 イントラデイ（1日の中）での詳細な損益推移とAIの判断を可視化するために記録する。
