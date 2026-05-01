@@ -1,5 +1,5 @@
-# AI-Driven Secure Asset Management & Trading Platform
-**AI駆動型 統合資産管理・自動運用プラットフォーム**
+# AI-Driven Secure Asset Management & Trading Platform Application Software
+**AI駆動型 統合資産管理・自動運用プラットフォームアプリケーションソフトウェア**
 
 ```mermaid
 graph LR
