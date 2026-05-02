@@ -15,7 +15,7 @@
 
 ### 2.1 インフラと連携
 - **実行環境**: Windows 10/11 上の Podman。`docker-compose` によってDBとアプリケーションを連携し管理。
-- **データベース**: PostgreSQL 15（SQLAlchemy 2.0 ORMを用いたデータ中心管理）。
+- **データベース**: SQLite (`backend/src/data.db`、個人ローカル運用前提)。SQLAlchemy 2.0 ORM を用いたデータ中心管理。将来クラウド化・マルチマシン同期等が必要になった場合は PostgreSQL 15 への移行を [DB_MIGRATION_GUIDE.md](DB_MIGRATION_GUIDE.md) 手順で行う (DATABASE_URL 1行差替えのみ・コード変更不要)。
 
 ### 2.2 ソフトウェア層
 - **バックエンド (API & Logic)**: Python 3.11 + FastAPI。スケジュール実行、データ取得、リアルタイム通信、AI連携（ローカルOllama）を担う。

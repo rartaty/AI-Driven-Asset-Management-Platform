@@ -13,8 +13,8 @@
    - ユーザー操作画面と描画。ポート 3000。
 2. **Backend (Python 3.11 / FastAPI コンテナ)**
    - REST API サーバーおよび、スケジュールワーカー（`APScheduler` または `schedule`）の同居稼働。
-3. **Database (PostgreSQL 15 コンテナ)**
-   - アセット状態、AI履歴、意思決定ログの永続化。ポート 5432。JSONB型を活用。
+3. **Database (SQLite ファイル `backend/src/data.db`)**
+   - アセット状態、AI履歴、意思決定ログの永続化。ファイルベースのためコンテナ・ポート不要。SQLAlchemy 2.0 の Mapped Style で PostgreSQL 互換 SQL を生成 (将来 PostgreSQL 移行時は DATABASE_URL 1行差替えのみ)。本格的な JSONB 必要時は PostgreSQL 移行を検討。
 
 ---
 
