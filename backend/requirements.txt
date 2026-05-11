@@ -1,0 +1,20 @@
+pytest==8.0.0
+pytest-mock==3.12.0
+pandas>=2.2.0
+numpy>=1.26.0
+fastapi>=0.109.0
+uvicorn>=0.27.0
+sqlalchemy>=2.0.0
+pydantic>=2.5.0
+apscheduler>=3.10.4
+requests>=2.31.0
+yfinance>=0.2.36
+# Phase 4: AWS SSM 経由シークレット取得 (要件 E.6.1 / ADR-0003)
+boto3>=1.34.0
+# Phase 4: 構造化ログ (要件 E.7 / 監査 P4)
+python-json-logger>=2.0.7
+# Phase 5b: EDINET XBRL 解析
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+# Phase 7: kabu Station Push API 接続 (要件 §B.2 / ADR-0009)
+websocket-client>=1.7.0

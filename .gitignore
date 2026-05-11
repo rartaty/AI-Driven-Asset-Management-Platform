@@ -1,0 +1,99 @@
+# =====================================================
+# Project Big Tester - .gitignore
+# 本PJ は現在 git 化されていないが、将来 git init 時に
+# 漏洩・誤コミットを防ぐ目的で先行整備 (2026-05-02)
+# =====================================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+ENV/
+
+# --- Node.js / Frontend ---
+node_modules/
+.next/
+out/
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp.*
+
+# --- Environment / secrets (CLAUDE.md 絶対禁止2 準拠) ---
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+# Allow .env.example as template
+!.env.example
+
+# --- Claude Code local-only files ---
+.claude/settings.local.json
+CLAUDE.local.md
+.claude/agent-logs/
+.claude/agent-memory/
+
+# --- Database (個人取引データ — 絶対コミットしない) ---
+backend/src/data.db
+backend/src/data.db-journal
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Editors / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
+
+# --- Build / artifacts ---
+*.exe
+*.dll
+*.so
+*.dylib
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# --- Misc ---
+新規 テキスト ドキュメント.txt
+
+# AI & Editor Configs
+.mcp.json
+CLAUDE.md
+.claude/
+.cursorrules
+.windsurfrules
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3

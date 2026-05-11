@@ -1,0 +1,4796 @@
+swagger: '2.0'
+info:
+  version: '1.10'
+  title:  AnserParaSOL API
+  description: |
+                本サービスでは、金融機関の設定や利用者の利用状況によって特定の項目の返却値が存在しない場合がある。  
+                返却値が存在しない場合、一律Nullを返却する。  
+                ただし、アクセストークン発行・再発行と口座一覧照会、口座情報照会の_links配下の項目は返却値が存在しない場合、項目ごと削除とする。  
+                  
+                本サービスでは以下のステータスコードを応答する。  
+                |HTTPステータスコード|付与基準|
+                |:-:|:-|
+                |200|正常応答|
+                |400|クライアントエラー/口座状態や利用者状態による一時的な照会エラー|
+                |401|Basic認証/Bearer認証エラー|
+                |403|スコープエラー/APIが使用不可|
+                |404|リソースなし|
+                |500|システムエラー|
+                |503|輻輳/閉塞/サービス時間外|
+                |504|タイムアウト|
+  
+  
+                レスポンスのContent-Typeは以下のとおり。  
+                ■アクセストークン発行・再発行  
+                  Content-Typeは「application/json;charset=UTF-8」となる。  
+                ■上記以外のAPI  
+                  ステータスコードが200の場合、Content-Typeは「application/json;charset=UTF-8」となる。  
+                  ステータスコードが200以外の場合、Content-Typeは「application/problem+json;charset=UTF-8」となる。
+
+basePath: /parasol/v1 
+schemes:
+  - https
+host: sample.apigw.opencanvas.ne.jp
+paths:
+  /banks/{bank_code}/oauth/auth:
+    get:
+      tags: [OAuth]
+      summary: API連携認証
+      description: 利用者に認証・認可を求め、認可の結果を受け取る。
+      operationId: auth
+      parameters:
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - in: query
+          name: response_type
+          description: |
+                        レスポンスタイプ  
+                        「code」のみ許可する。
+          required: true
+          type: string
+          x-example: 'code'
+          enum:
+            - 'code'
+        - in: query
+          name: client_id
+          description: |
+                        クライアント識別子
+          required: true
+          type: string
+          format: "半角英数字"
+          x-example: 'Finte001'
+          minLength: 8
+          maxLength: 8
+        - in: query
+          name: redirect_uri
+          description: |
+                        リダイレクトURL
+          required: true
+          type: string
+          format: "半角英数字記号"
+          x-example: 'https://example.com'
+          minLength: 1
+          maxLength: 256
+        - in: query
+          name: state
+          description: |
+                        ステート  
+                        利用者による認可が得られた場合、ステートをAPI連携事業者に返却する。  
+                        API連携事業者はAPI連携認証リクエスト時に送信したステートと同一か確認する。
+          required: false
+          type: string
+          format: "半角英数字記号"
+          x-example: '1111'
+          minLength: 1
+          maxLength: 256
+        - in: query
+          name: scope
+          description: |
+                        スコープ  
+                        複数業務を設定する場合は、半角スペース区切りとする。また、設定値の順序に関係は無い。  
+                        アクセス可能な機能に制限を設けるために以下を設定。  
+                        ・accounts：照会業務  
+                        ・personal_transfers：振込・振替（振替）  
+                        ・registration_transfers：振込・振替(事前登録）  
+                        ・registration_apiservice_settlements：振込・振替（ＡＰＩ連携サービス決済）  
+                        ・personal_information：契約者情報照会  
+                        ・person_authentication：本人認証連携  
+                        
+                        ※「person_authentication」以外のスコープ設定時には「accounts」の設定必須   
+                        ※「person_authentication」の設定時には他スコープの設定不可  
+                        ※「personal_information」を含む場合、リフレッシュトークンによるアクセストークンの再発行不可（都度利用者による認可が必要）
+          required: false
+          type: string
+          format: "半角英数字記号"
+          x-example: 'accounts personal_transfers'
+        - in: query
+          name: branch_code
+          description: |
+                        支店コード
+                        スコープに「person_authentication」設定された時のみ支店コードの設定が可能
+                        本人認証連携画面の入力補完に使用
+          required: false
+          type: string
+          format: "半角数字"
+          x-example: '001'
+          minLength: 3
+          maxLength: 3
+        - in: query
+          name: account_type_code
+          description: |
+                        預金種目コード
+                        スコープに「person_authentication」設定された時のみ預金種目コードの設定が可能
+                        本人認証連携画面の入力補完に使用
+          required: false
+          type: string
+          format: "半角数字"
+          x-example: '1'
+          minLength: 1
+          maxLength: 1
+        - in: query
+          name: account_number
+          description: |
+                        口座番号
+                        スコープに「person_authentication」設定された時のみ口座番号の設定が可能
+                        本人認証連携画面の入力補完に使用
+          required: false
+          type: string
+          format: "半角数字"
+          x-example: '1234567'
+          minLength: 1
+          maxLength: 7
+        - in: query
+          name: authentication_type
+          description: |
+                        認証方式
+                        otp=ワンタイムパスワード認証
+                        スコープに「person_authentication」設定された時に認証方式を設定する。
+          enum:
+           - 'otp'
+          required: false
+          type: string
+          x-example: 'otp'
+        - in: query
+          name: bankauth
+          description: |
+                        スマートフォンアプリ認証  
+                        「on」を指定した場合、API連携認証（スマホアプリ認証）画面に遷移する。
+          enum:
+           - 'on'
+          required: false
+          type: string
+          x-example: 'on'
+      responses:
+        '302':
+         description: Found
+         headers:
+           Location:
+             description: |
+                           利用者が認可した場合は、「 {リダイレクトURL}?code={認可コード}&state={ステート}」が設定される。  
+                           利用者が操作を中止した場合や、なんらかの異常が発生した場合は、「 {リダイレクトURL}?error={エラーコード}&error_description={エラーメッセージ}&state={ステート}」が設定される。
+             type: string
+  /banks/{bank_code}/oauth/token:
+    post:
+      tags: [OAuth]
+      summary: アクセストークン発行・再発行
+      description: アクセストークンを発行、または再発行する。
+      operationId: token
+      consumes:
+        - application/x-www-form-urlencoded
+      produces:
+        - application/json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBasic'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - in: formData
+          name: grant_type
+          description: |
+                        グラントタイプ  
+                        アクセストークン発行時はauthorization_code、アクセストークン再発行時はrefresh_tokenを指定する。
+          required: true
+          type: string
+          x-example: 'authorization_code'
+          enum:
+            - 'authorization_code'
+            - 'refresh_token'
+        - in: formData
+          name: code
+          description: |
+                        認可コード  
+                        グラントタイプにauthorization_code選択時は設定する。refresh_token選択時は設定しない。
+          required: false
+          type: string
+          format: "半角英数字"
+          x-example: 'au5723130d3042eea0a6e6b7a97d0001'
+          minLength: 32
+          maxLength: 32
+        - in: formData
+          name: redirect_uri
+          description: |
+                        リダイレクトＵＲＬ  
+                        API連携認証で指定したリダイレクトＵＲＬ。  
+                        グラントタイプにauthorization_code選択時は設定する。refresh_token選択時は設定しない。
+          required: false
+          type: string
+          format: "半角英数字記号"
+          x-example: 'https://example.com'
+          minLength: 1
+          maxLength: 256
+        - in: formData
+          name: refresh_token
+          description: |
+                        リフレッシュトークン  
+                        グラントタイプにrefresh_token選択時は設定する。authorization_code選択時は設定しない。
+          required: false
+          type: string
+          format: "半角英数字"
+          x-example: 'ac5723130d3042eea0a6e6b7a97d0001'
+          minLength: 32
+          maxLength: 32
+        - in: formData
+          name: auto_manual_mode
+          description: |
+                        自動手動モード  
+                        auto=自動 manual=手動  
+                        グラントタイプにrefresh_token選択時は設定する。authorization_code選択時は設定しない。  
+                        利用者操作契機による要求には「手動」、それ以外の契機の場合は「自動」を設定する。
+          required: false
+          type: string
+          x-example: 'auto'
+          enum:
+            - 'auto'
+            - 'manual'
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - access_token
+              - token_type
+              - expires_in
+              - refresh_token
+              - scope
+            properties:
+              access_token:
+                type: string
+                format: "半角英数字"
+                example: '7d0e8fddb23a40a2b5f73c2771e9c4c7'
+                description: |
+                              アクセストークン
+                x-nullable: false
+                minLength: 32
+                maxLength: 32
+              token_type:
+                type: string
+                example: 'Bearer'
+                description: |
+                              トークンタイプ  
+                              「Bearer」のみ設定する。
+                enum:
+                  - 'Bearer'
+                x-nullable: false
+              expires_in:
+                type: integer
+                example: 3600
+                description: |
+                              アクセストークン有効期間  
+                              秒数を設定する。
+                x-nullable: false
+                minimum: 1
+                maximum: 59940
+              refresh_token:
+                type: string
+                format: "半角英数字"
+                example: 'ca5723130d3042eea0a6e6b7a97d0455'
+                description: |
+                              リフレッシュトークン
+                x-nullable: false
+                minLength: 32
+                maxLength: 32
+              user_id:
+                type: string
+                format: "半角数字"
+                example: '99999901'
+                description: |
+                              契約者通番  
+                              AnserParaSOLにおいて利用者を一意に識別する番号  
+                              グラントタイプにauthorization_codeを選択した時のみ含まれる。  
+                              金融機関やAnserParaSOLへ問い合わせる際に利用する。
+                x-nullable: false
+                minLength: 1
+                maxLength: 8
+              refresh_token_limit_date:
+                type: string
+                format: date
+                example: '2015-12-12'
+                description: |
+                              リフレッシュトークン有効期限  
+                              グラントタイプにauthorization_codeを選択した時のみ含まれる。
+                x-nullable: false
+                minLength: 10
+                maxLength: 10
+              scope:
+                type: string
+                format: "半角英数字記号"
+                example: 'accounts'
+                description: |
+                              スコープ  
+                              認可時に複数業務が設定されている場合は、半角スペース区切りとする。また、設定値の順序に関係は無い。  
+                              ・accounts：照会業務  
+                              ・personal_transfers：振込・振替（振替）  
+                              ・registration_transfers：振込・振替(事前登録）  
+                              ・registration_apiservice_settlements：振込・振替（ＡＰＩ連携サービス決済）  
+                              ・personal_information：契約者情報照会  
+                              ・person_authentication：本人認証連携  
+                              
+                              認可時にスコープを指定しなかった場合は、「accounts」が設定される。
+                x-nullable: false
+        '400':
+          description: 'Bad Request'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Basic認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Basic realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+  /banks/{bank_code}/oauth/revoke:
+    post:
+      tags: [OAuth]
+      summary: トークン失効
+      description: |
+                    トークンを失効させる。  
+                    削除対象のトークンがアクセストークンである場合、契約者に紐付くリフレッシュトークンも無効にする。  
+                    削除対象のトークンがリフレッシュトークンである場合、契約者に紐付くアクセストークンも無効にする。
+      operationId: revoke
+      consumes:
+        - application/x-www-form-urlencoded
+      produces:
+        - application/json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBasic'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - in: formData
+          name: token
+          description: |
+                        トークン  
+                        削除対象のアクセストークンもしくはリフレッシュトークンを設定する。
+          required: true
+          type: string
+          format: "半角英数字"
+          x-example: 'ca5723130d3042eea0a6e6b7a97d0001'
+          minLength: 32
+          maxLength: 32
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: 'Bad Request'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Basic認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Basic realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+  /banks/{bank_code}/accounts:
+    get:
+      tags: [accounts]
+      summary: 口座一覧照会
+      description: |
+                    契約者が保有する口座情報を照会する。  
+                    保有する投信口座の情報が取得できない場合には、口座取得エラー一覧(リスト)にエラー情報を設定し投信口座以外の口座情報を返却する。
+                    口座の残高情報のみ取得できない場合には、対象口座にエラー情報を設定し正常レスポンスを返却する。
+      operationId: getAccounts
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - $ref: '#/parameters/AutoManualModeQuery'
+        - in: query
+          name: account_classification
+          description: |
+                        口座分類  
+                        取得対象の口座分類を指定する。  
+                        yen_currency_account=円貨口座を取得  
+                        未指定時はすべての口座分類を取得対象とする。
+          required: false
+          type: string
+          x-example: 'yen_currency_account'
+          enum:
+           - 'yen_currency_account'
+      responses:
+        '200':
+          description: 'OK'
+          schema:
+            $ref: '#/definitions/AccountResponse'
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/accounts/{account_id}:
+    get:
+      tags: [accounts]
+      summary: 口座情報照会
+      description: |
+                    指定した口座の口座情報を照会する。  
+                    本APIは口座一覧照会と同等の情報返却するため、同一のJSON構造でレスポンスを返却する。
+      operationId: getAccount
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - $ref: '#/parameters/AccountIdPath'
+        - in: query
+          name: query_method
+          description: |
+                        照会方式  
+                        残高の照会方式を設定する。  
+                        online=リアルタイムの情報を照会 offline=AnserParaSOLにて保管している情報を照会  
+                        外貨口座、投信口座については、リアルタイムでの残高情報を取得できないためオンライン方式を指定できない。  
+                        本パラメータを設定しない場合は、AnserParaSOLにてサービス時間を確認し、照会可能な方式で情報を取得する。
+          required: false
+          type: string
+          x-example: 'online'
+          enum:
+           - 'online'
+           - 'offline'
+        - $ref: '#/parameters/AutoManualModeQuery'
+      responses:
+        '200':
+          description: 'OK'
+          schema:
+            $ref: '#/definitions/AccountResponse'
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/accounts/{account_id}/transactions:
+    get:
+      tags: [accounts]
+      summary: 入出金取引明細照会
+      description: 指定した口座の入出金取引明細を照会する。
+      operationId: getTransactions
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - $ref: '#/parameters/AccountIdPath'
+        - in: query
+          name: query_method
+          description: |
+                        照会方式  
+                        取引明細の照会方式を設定する。  
+                        online=リアルタイムの情報を照会 offline=AnserParaSOLにて保管している情報を照会  
+                        外貨口座、投信口座については、リアルタイムでの取引明細情報を取得できないためオンライン方式を指定できない。  
+                        本パラメータを設定しない場合は、AnserParaSOLにてサービス時間を確認し、照会可能な方式で情報を取得する。
+          required: false
+          type: string
+          x-example: 'online'
+          enum:
+           - 'online'
+           - 'offline'
+        - $ref: '#/parameters/AutoManualModeQuery'
+        - in: query
+          name: date_from
+          description: |
+                        対象期間(from)
+          required: true
+          type: string
+          format: date
+          x-example: '2018-04-01'
+          minLength: 10
+          maxLength: 10
+        - in: query
+          name: date_to
+          description: |
+                        対象期間(to)  
+                        照会方式がオンライン方式の場合、返却できる明細は最大1年分とする。  
+                        照会方式がオフライン方式の場合は金融機関ごとに返却できる明細の期間が異なる。  
+                        ただし、オンライン方式の場合は金融機関ホストの性能や電文量によりエラーとなる場合があるため、1ヵ月以上の期間は指定しないことを推奨する。
+          required: true
+          type: string
+          format: date
+          x-example: '2018-04-10'
+          minLength: 10
+          maxLength: 10
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - account_id
+              - currency_code
+              - base_date
+              - base_time
+              - has_next
+              - count
+              - transactions
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                example: 'p-12345678-y-1234'
+                description: |
+                              口座識別子
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              currency_code:
+                type: string
+                format: "半角英字"
+                example: 'USD'
+                description: |
+                              通貨コード  
+                              ISO4217で規定されているコードを設定する。
+                x-nullable: false
+                minLength: 3
+                maxLength: 3
+              base_date:
+                type: string
+                format: date
+                example: '2018-01-01'
+                description: |
+                              基準日
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              base_time:
+                type: string
+                format: "半角数字記号"
+                example: '12:30:00+09:00'
+                description: | 
+                              基準時刻  
+                              hh:mm:00+09:00の形式で時刻を返却する。
+                x-nullable: true
+                minLength: 14
+                maxLength: 14
+              has_next:
+                type: boolean
+                example: false
+                description: | 
+                              継続情報(next)  
+                              本APIでは一括で明細を返却するためfalseを返却する。
+                enum: 
+                 - false
+                x-nullable: false
+              count:
+                type: integer
+                example: 10
+                description: |
+                              取得取引件数  
+                              取得した取引明細件数を設定する。
+                x-nullable: false
+                minimum: 0
+                maximum: 9999
+              transactions:
+                type: array
+                description: |
+                              取引一覧(リスト)
+                items:
+                  type: object
+                  required:
+                    - transaction_id
+                    - status
+                    - transaction_date
+                    - value_date
+                    - transaction_detail
+                    - transaction_type
+                    - amount
+                    - transaction_balance
+                    - exchange_rate
+                    - operation
+                    - abstract
+                    - customer_id
+                  properties:
+                    transaction_id:
+                       type: string
+                       format: "半角英数字"
+                       example: '11100001'
+                       description: |
+                                    取引識別子
+                       x-nullable: false
+                       minLength: 1
+                       maxLength: 8
+                    status:
+                       type: string
+                       example: 'normal'
+                       description: |
+                                     明細ステータス  
+                                     normal=正常 cancelled=取消 insufficient_data=欠番  
+                                     金融機関システムの何らかの理由により取引金額など一部情報が連携できない場合に欠番が設定される。
+                       x-nullable: false
+                       enum:
+                         - 'normal'
+                         - 'cancelled'
+                         - 'insufficient_data'
+                    transaction_date:
+                      type: string
+                      format: date
+                      example: '2017-05-30'
+                      description: |
+                                    取引日  
+                                    金融機関の設定により、「YYYY-MM-DD」「0000-MM-DD」「0000-00-DD」のいずれかの形式で値を返却する。
+                      x-nullable: true
+                      minLength: 10
+                      maxLength: 10
+                    value_date:
+                      type: string
+                      format: date
+                      example: '2017-06-30'
+                      description: |
+                                     起算日  
+                                     金融機関の設定により、「YYYY-MM-DD」「0000-MM-DD」「0000-00-DD」のいずれかの形式で値を返却する。
+                      x-nullable: true
+                      minLength: 10
+                      maxLength: 10
+                    transaction_detail:
+                      type: string
+                      format: "半角全角"
+                      example: '預入'
+                      description: |
+                                    取引内容
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 30
+                    transaction_type:
+                      type: string
+                      example: payin
+                      description: |
+                                    入払区分  
+                                    入出金の種別を設定する。payin=入金 payout=出金
+                      enum:
+                       - 'payin'
+                       - 'payout'
+                      x-nullable: true
+                    amount:
+                      type: number
+                      example: 10000
+                      description: |
+                                    取引金額
+                      x-nullable: true
+                      minimum: -999999999999.99
+                      maximum: 9999999999999.99
+                    transaction_balance:
+                      type: number
+                      example: 1000000
+                      description: |
+                                    取引後残高
+                      x-nullable: true
+                      minimum: -999999999999.99
+                      maximum: 9999999999999.99
+                    exchange_rate:
+                      type: number
+                      example: 101.85
+                      description: |
+                                    適用相場  
+                                    対象口座が外貨口座の場合、適用相場を設定する。  
+                                    外貨口座以外の場合、Nullを設定する。
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999.99
+                    operation:
+                      type: string
+                      format: "半角全角"
+                      example: '円から外貨'
+                      description: |
+                                    取扱  
+                                    対象口座が外貨口座の場合、取扱を設定する。  
+                                    外貨口座以外の場合、Nullを設定する。
+                      x-nullable: true
+                      minLength: 1
+                      maxLength: 30
+                    abstract:
+                      type: string
+                      format: "半角全角"
+                      example: '水道料金'
+                      description: |
+                                    摘要内容
+                      x-nullable: true
+                      minLength: 1
+                      maxLength: 48
+                    customer_id:
+                      type: string
+                      format: "半角数字"
+                      example: '11111111111111111111'
+                      description: |
+                                    需要家番号  
+                                    円貨口座以外の場合、Nullを設定する。
+                      x-nullable: true
+                      minLength: 20
+                      maxLength: 20
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/accounts/{account_id}/term_deposits:
+    get:
+      tags: [accounts]
+      summary: 定期保有明細照会
+      description: 指定した口座の定期保有明細を照会する。
+      operationId: getTermDeposits
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - $ref: '#/parameters/AccountIdPath'
+        - $ref: '#/parameters/AutoManualModeQuery'
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - account_id
+              - currency_code
+              - base_date
+              - base_time
+              - has_next
+              - ttb
+              - rate_base_date
+              - rate_base_time
+              - count
+              - term_deposits
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                example: 'p-12345678-y-1234'
+                description: |
+                              口座識別子
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              currency_code:
+                type: string
+                format: "半角英字"
+                example: 'USD'
+                description: |
+                              通貨コード  
+                              ISO4217で規定されているコードを設定する。
+                x-nullable: false
+                minLength: 3
+                maxLength: 3
+              base_date:
+                type: string
+                format: date
+                example: '2018-01-01'
+                description: |
+                              基準日
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              base_time:
+                type: string
+                format: "半角数字記号"
+                example: '12:30:00+09:00'
+                description: | 
+                              基準時刻  
+                              hh:mm:00+09:00の形式で時刻を返却する。
+                x-nullable: true
+                minLength: 14
+                maxLength: 14
+              has_next:
+                type: boolean
+                example: false
+                description: | 
+                              継続情報(next)  
+                              本APIでは一括で明細を返却するためfalseを返却する。
+                enum:
+                 - false
+                x-nullable: false
+              ttb:
+                type: number
+                example: 100.55
+                description: |
+                              外貨払出適用レート  
+                              外貨払出適用レート(TTB)を設定する。  
+                              外貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minimum: 0
+                maximum: 999999.99
+              rate_base_date:
+                type: string
+                format: date
+                example: '2018-01-01'
+                description: |
+                              外貨レート基準日  
+                              レートの設定日を設定する。  
+                              外貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              rate_base_time:
+                type: string
+                format: "半角数字記号"
+                example: '12:30:00+09:00'
+                description: |
+                              外貨レート基準時刻  
+                              レートの設定時刻をhh:mm:00+09:00の形式で時刻を返却する。  
+                              外貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minLength: 14
+                maxLength: 14
+              count:
+                type: integer
+                example: 10
+                description: |
+                              取得保有明細件数  
+                              取得した保有明細件数を設定する。
+                x-nullable: false
+                minimum: 0
+                maximum: 9999
+              term_deposits:
+                type: array
+                description: |
+                              保有定期商品明細一覧(リスト)
+                items:
+                  type: object
+                  required:
+                    - deposit_id
+                    - product_name
+                    - deposit_term
+                    - interest_rate
+                    - deposit_date
+                    - maturity_date
+                    - handling_at_maturity
+                    - deposit_amount
+                    - abstract1
+                    - abstract2
+                    - abstract3
+                    - original_deposit_id
+                    - original_deposit_date
+                    - original_deposit_amount
+                    - original_exchange_rate
+                  properties:
+                    deposit_id:
+                      type: string
+                      format: "半角数字"
+                      example: '001'
+                      description: |
+                                    預入番号
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 27
+                    product_name:
+                      type: string
+                      format: "半角全角"
+                      example: 'スーパー外貨定期'
+                      description: |
+                                    定期商品名
+                      x-nullable: true
+                      minLength: 1
+                      maxLength: 40
+                    deposit_term:
+                      type: string
+                      format: "半角全角"
+                      example: '3年'
+                      description: |
+                                    預入期間
+                      x-nullable: true
+                      minLength: 1
+                      maxLength: 40
+                    interest_rate:
+                      type: number
+                      example: 0.5
+                      description: |
+                                    利率
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 99999999
+                    deposit_date:
+                      type: string
+                      format: date
+                      example: '2017-01-01'
+                      description: |
+                                    預入日
+                      x-nullable: false
+                      minLength: 10
+                      maxLength: 10
+                    maturity_date:
+                      type: string
+                      format: date
+                      example: '2020-01-01'
+                      description: |
+                                    満期日
+                      x-nullable: false
+                      minLength: 10
+                      maxLength: 10
+                    handling_at_maturity:
+                      type: string
+                      format: "半角全角"
+                      example: '元利継続'
+                      description: |
+                                    満期時取扱内容
+                      x-nullable: true
+                      minLength: 1
+                      maxLength: 40
+                    deposit_amount:
+                      type: number
+                      example: 123456.78
+                      description: |
+                                     預入金額
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999999999999
+                    abstract1:
+                      type: string
+                      format: "半角全角"
+                      example: 'XXX'
+                      description: |
+                                    摘要１
+                      x-nullable: true
+                      minLength: 1
+                      maxLength: 48
+                    abstract2:
+                      type: string
+                      format: "半角全角"
+                      example: 'XXX'
+                      description: |
+                                    摘要２  
+                                    取得対象が外貨口座の場合、摘要を設定する。  
+                                    外貨口座以外の場合、Nullを設定する。
+                      x-nullable: true
+                      minLength: 1
+                      maxLength: 48
+                    abstract3:
+                      type: string
+                      format: "半角全角"
+                      example: 'XXX'
+                      description: |
+                                    摘要３  
+                                    取得対象が外貨口座の場合、摘要を設定する。  
+                                    外貨口座以外の場合、Nullを設定する。
+                      x-nullable: true
+                      minLength: 1
+                      maxLength: 48
+                    original_deposit_id:
+                      type: string
+                      format: "半角数字"
+                      example: '001'
+                      description: |
+                                    当初預入番号  
+                                    取得対象が外貨口座の場合、取引した当初の取引番号を設定する。  
+                                    外貨口座以外の場合、Nullを設定する。
+                      x-nullable: true
+                      minLength: 1
+                      maxLength: 27
+                    original_deposit_date:
+                      type: string
+                      format: date
+                      example: '2014-01-01'
+                      description: |
+                                    当初預入日  
+                                    取得対象が外貨口座の場合、初回取引の発生日付を設定する。  
+                                    外貨口座以外の場合、Nullを設定する。
+                      x-nullable: true
+                      minLength: 10
+                      maxLength: 10
+                    original_deposit_amount:
+                      type: number
+                      example: 123.45
+                      description: |
+                                    当初預入金額  
+                                    取得対象が外貨口座の場合、取引した当初の取引金額を設定する。  
+                                    外貨口座以外の場合、Nullを設定する。
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 9999999999999.99
+                    original_exchange_rate:
+                      type: number
+                      example: 107.31
+                      description: |
+                                    当初適用相場  
+                                    取得対象が外貨口座の場合、取引した当初の適用相場を設定する。  
+                                    外貨口座以外の場合、Nullを設定する。
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999.99
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/accounts/{account_id}/funds:
+    get:
+      tags: [accounts]
+      summary: 投信保有明細照会
+      description: 指定した口座の投信保有明細を照会する。
+      operationId: getFunds
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - $ref: '#/parameters/AccountIdPath'
+        - $ref: '#/parameters/AutoManualModeQuery'
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - account_id
+              - base_date
+              - has_next
+              - count
+              - funds
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                example: 'p-12345678-i-1234'
+                description: |
+                              口座識別子
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              base_date:
+                type: string
+                format: date
+                example: '2018-01-01'
+                description: |
+                              基準日
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              has_next:
+                type: boolean
+                example: false
+                description: | 
+                              継続情報(next)  
+                              本APIでは一括で明細を返却するためfalseを返却する。
+                enum:
+                 - false
+                x-nullable: false
+              count:
+                type: integer
+                example: 10
+                description: |
+                              取得保有明細件数  
+                              取得した保有明細件数を設定する。
+                x-nullable: false
+                minimum: 0
+                maximum: 9999
+              funds:
+                type: array
+                description: |
+                              保有ファンド明細一覧(リスト)
+                items:
+                  type: object
+                  required:
+                    - fund_name
+                    - fund_id
+                    - investment_type
+                    - handling_of_dividend
+                    - unit
+                    - net_asset_value
+                    - principal_per_unit
+                    - value_at_cancellation
+                    - purchase_price
+                    - price_per_unit
+                    - appraisal_value
+                    - appraisal_profit_or_loss
+                  properties:
+                    fund_name:
+                      type: string
+                      format: "半角全角"
+                      example: 'ＡＮＳＥＲ新興国毎月決算型ファンド（分配金受取りコース）'
+                      description: |
+                                    ファンド名
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 128
+                    fund_id:
+                      type: string
+                      format: "半角数字"
+                      example: '22000002'
+                      description: |
+                                    ファンドID  
+                                    金融機関独自のファンド識別コード
+                      x-nullable: false
+                      minLength: 8
+                      maxLength: 8
+                    investment_type:
+                      type: string
+                      example: 'general'
+                      description: |
+                                    預り区分  
+                                    general=一般 specific=特定 nisa=NISA deposit_nisa=つみたてNISA
+                      enum:
+                       - 'general'
+                       - 'specific'
+                       - 'nisa'
+                       - 'deposit_nisa'
+                      x-nullable: false
+                    handling_of_dividend:
+                      type: string
+                      example: 'payout'
+                      description: |
+                                    一般累投区分  
+                                    payout=一般 reinvestment=累投
+                      enum:
+                       - 'payout'
+                       - 'reinvestment'
+                      x-nullable: false
+                    unit:
+                      type: integer
+                      format: int64
+                      example: 94069
+                      description: |
+                                    保有口数
+                      x-nullable: false
+                      minimum: 1
+                      maximum: 999999999999999
+                    net_asset_value:
+                      type: number
+                      example: 10102
+                      description: |
+                                    基準価額
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 99999999
+                    principal_per_unit:
+                      type: number
+                      example: 10604.66
+                      description: |
+                                    個別元本
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 9999999999999.99
+                    value_at_cancellation:
+                      type: number
+                      example: 10102
+                      description: |
+                                    解約価額
+                      x-nullable: true
+                      minimum: 1
+                      maximum: 99999999
+                    purchase_price:
+                      type: number
+                      example: 102912
+                      description: |
+                                    取得金額／購入金額
+                      x-nullable: true
+                      minimum: 1
+                      maximum: 999999999999999
+                    price_per_unit:
+                      type: number
+                      example: 10940
+                      description: |
+                                    取得単価／購入単価
+                      x-nullable: true
+                      minimum: 1
+                      maximum: 9999999999999.99
+                    appraisal_value:
+                      type: number
+                      example: 95029
+                      description: |
+                                    評価金額
+                      x-nullable: false
+                      minimum: 0
+                      maximum: 999999999999999
+                    appraisal_profit_or_loss:
+                      type: number
+                      example: -7883
+                      description: |
+                                    評価損益
+                      x-nullable: false
+                      minimum: -999999999999999
+                      maximum: 999999999999999
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/accounts/{account_id}/investment_profit_and_loss':
+    get:
+      tags:
+        - accounts
+      summary: 投信運用損益照会
+      description: 指定した口座の投信運用損益を照会する。
+      operationId: getInvestment
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - $ref: '#/parameters/AccountIdPath'
+        - $ref: '#/parameters/AutoManualModeQuery'
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - account_id
+              - base_date
+              - has_next
+              - count
+              - funds
+              - total_funds
+            properties:
+              account_id:
+                type: string
+                format: 半角英数字記号
+                example: p-12345678-i-1234
+                description: |
+                  口座識別子
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              base_date:
+                type: string
+                format: date
+                example: '2018-01-01'
+                description: |
+                  基準日
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              has_next:
+                type: boolean
+                example: false
+                description: |
+                  継続情報(next)  
+                  本APIでは一括で明細を返却するためfalseを返却する。
+                enum:
+                  - false
+                x-nullable: false
+              count:
+                type: integer
+                example: 10
+                description: |
+                  取得運用損益件数  
+                  取得した運用損益件数を設定する。
+                x-nullable: false
+                minimum: 0
+                maximum: 9999
+              funds:
+                type: array
+                description: |
+                  運用損益一覧(リスト)
+                items:
+                  type: object
+                  required:
+                    - fund_name
+                    - fund_id
+                    - investment_type
+                    - handling_of_dividend
+                    - unit
+                    - net_asset_value
+                    - value_at_cancellation
+                    - appraisal_value
+                    - investment_value
+                    - beneficiary_value
+                    - dividend_price
+                    - disposal_value
+                    - investment_profit_and_loss
+                  properties:
+                    fund_name:
+                      type: string
+                      format: 半角全角
+                      example: ＡＮＳＥＲ新興国毎月決算型ファンド（分配金受取りコース）
+                      description: |
+                        ファンド名
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 128
+                    fund_id:
+                      type: string
+                      format: 半角数字
+                      example: '22000002'
+                      description: |
+                        ファンドID  
+                        金融機関独自のファンド識別コード
+                      x-nullable: false
+                      minLength: 8
+                      maxLength: 8
+                    investment_type:
+                      type: string
+                      example: general
+                      description: |
+                        預り区分  
+                        general=一般 specific=特定 nisa=NISA deposit_nisa=つみたてNISA
+                      enum:
+                        - general
+                        - specific
+                        - nisa
+                        - deposit_nisa
+                      x-nullable: true
+                    handling_of_dividend:
+                      type: string
+                      example: payout
+                      description: |
+                        一般累投区分  
+                        payout=一般 reinvestment=累投
+                      enum:
+                        - payout
+                        - reinvestment
+                      x-nullable: false
+                    unit:
+                      type: integer
+                      format: int64
+                      example: 94069
+                      description: |
+                        保有口数
+                      x-nullable: false
+                      minimum: 0
+                      maximum: 99999999999
+                    net_asset_value:
+                      type: number
+                      example: 10102
+                      description: |
+                        基準価額
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999999999999
+                    value_at_cancellation:
+                      type: number
+                      example: 10102
+                      description: |
+                        解約価額
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999999999999
+                    appraisal_value:
+                      type: number
+                      example: 95029
+                      description: |
+                        評価金額
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999999999999
+                    investment_value:
+                      type: number
+                      example: 13989
+                      description: |
+                        投資金額
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999999999999
+                    beneficiary_value:
+                      type: number
+                      example: 182043
+                      description: |
+                        受取金額
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999999999999
+                    dividend_price:
+                      type: number
+                      example: 770
+                      description: |
+                        受取分配金
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999999999999
+                    disposal_value:
+                      type: number
+                      example: 9824
+                      description: |
+                        売却金額
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999999999999
+                    investment_profit_and_loss:
+                      type: number
+                      example: 10189
+                      description: |
+                        運用損益
+                      x-nullable: true
+                      minimum: -999999999999999
+                      maximum: 999999999999999
+              total_funds:
+                type: array
+                description: |
+                  合計金額一覧(リスト)
+                items:
+                  type: object
+                  required:
+                    - keeping_division
+                    - total_appraisal_value
+                    - total_beneficiary_value
+                    - total_dividend_price
+                    - total_disposal_value
+                    - total_investment_value
+                    - total_investment_profit_and_loss
+                  properties:
+                    keeping_division:
+                      type: string
+                      example: general
+                      description: |
+                        預り区分  
+                        general=一般 specific=特定 nisa=NISA deposit_nisa=つみたてNISA
+                      enum:
+                        - general
+                        - specific
+                        - nisa
+                        - deposit_nisa
+                      x-nullable: true
+                    total_appraisal_value:
+                      type: number
+                      example: 13989
+                      description: |
+                        評価金額合計
+                      x-nullable: true
+                      minLength: 0
+                      maxLength: 999999999999999
+                    total_beneficiary_value:
+                      type: number
+                      example: 182043
+                      description: |
+                        受取金額合計
+                      x-nullable: true
+                      minimum: 1
+                      maximum: 999999999999999
+                    total_dividend_price:
+                      type: number
+                      example: 9824
+                      description: |
+                        受取分配金合計
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999999999999
+                    total_disposal_value:
+                      type: number
+                      example: 9824
+                      description: |
+                        売却金額合計
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999999999999
+                    total_investment_value:
+                      type: number
+                      example: 5000
+                      description: |
+                        投資金額合計
+                      x-nullable: true
+                      minimum: 0
+                      maximum: 999999999999999
+                    total_investment_profit_and_loss:
+                      type: number
+                      example: 10189
+                      description: |
+                        運用損益合計
+                      x-nullable: true
+                      minimum: -999999999999999
+                      maximum: 999999999999999
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/accounts/{account_id}/card_loan_contracts':
+    get:
+      tags: [accounts]
+      summary: カードローン契約内容照会
+      description: 指定した口座のカードローン契約内容を照会する。
+      operationId: getCardLoanContracts
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - $ref: '#/parameters/AccountIdPath'
+        - $ref: '#/parameters/AutoManualModeQuery'
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - account_id
+              - product_name
+              - contract_date
+              - contract_term
+              - monthly_repayment_date
+              - monthly_repayment_amount
+              - interest_rate
+              - base_date
+              - base_time
+              - loan_balance
+              - interest_amount
+              - unpaid_interest_amount
+              - unpaid_principal
+              - credit_line
+              - loan_possible_balance
+              - automatic_extension_type
+              - payment_branch_name
+              - payment_subject_name
+              - payment_account_number
+              - borrowing_flag
+              - payment_flag
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                example: 'p-12345678-y-1234'
+                description: |
+                              口座識別子
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              product_name:
+                type: string
+                format: "半角全角"
+                example: 'データ銀行カードローン'
+                description: |
+                              カードローン商品名
+                x-nullable: true
+                minLength: 1
+                maxLength: 50
+              contract_date:
+                type: string
+                format: date
+                example: '2012-01-01'
+                description: |
+                              契約日
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              contract_term:
+                type: string
+                format: "半角全角"
+                example: '5年'
+                description: |
+                              契約期間
+                x-nullable: true
+                minLength: 2
+                maxLength: 3
+              monthly_repayment_date:
+                type: string
+                format: "半角全角"
+                example: '1日'
+                description: |
+                              毎月返済日
+                x-nullable: true
+                minLength: 2
+                maxLength: 3
+              monthly_repayment_amount:
+                type: number
+                example: 20000
+                description: |
+                              毎月返済金額
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999999
+              interest_rate:
+                type: number
+                example: 10.5
+                description: |
+                              金利
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999
+              base_date:
+                type: string
+                format: date
+                example: '2018-01-01'
+                description: |
+                              基準日
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              base_time:
+                type: string
+                format: "半角数字記号"
+                example: '12:30:00+09:00'
+                description: | 
+                              基準時刻
+                              時刻をhh:mm:00+09:00の形式で時刻を返却する。
+                x-nullable: true
+                minLength: 14
+                maxLength: 14
+              loan_balance:
+                type: number
+                example: 70000
+                description: |
+                              借入残高
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999999
+              interest_amount:
+                type: number
+                example: 7350
+                description: |
+                              利息
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999999
+              unpaid_principal:
+                type: number
+                example: 10000
+                description: |
+                              未払元金
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999999
+              unpaid_interest_amount:
+                type: number
+                example: 1000
+                description: |
+                              未払利息
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999999
+              credit_line:
+                type: number
+                example: 1000000000
+                description: | 
+                              利用限度額  
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999999
+              loan_possible_balance:
+                type: number
+                example: 999990000
+                description: |
+                              借入可能額
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999999
+              automatic_extension_type:
+                type: string
+                description: |
+                              契約期間満期時自動更新区分
+                              '0':対象外 '1':対象  
+                example: '1'
+                x-nullable: true
+              payment_branch_name:
+                type: string
+                format: "半角全角"
+                description: |
+                              返済口座支店名
+                example: '泉岳寺支店'
+                x-nullable: true
+                minLength: 1
+                maxLength: 30
+              payment_subject_name:
+                type: string
+                format: "全角"
+                description: |
+                              返済口座科目名
+                example: '普通'
+                x-nullable: true
+                minLength: 1
+                maxLength: 10
+              payment_account_number:
+                type: string
+                format: "半角数字"
+                description: |
+                              返済口座番号
+                example: '1234567'
+                x-nullable: true
+                minLength: 1
+                maxLength: 10
+              borrowing_flag:
+                type: string
+                format: "半角数字"
+                description: |
+                              借入可否
+                              '0':利用可 '1':利用不可  
+                example: '1'
+                x-nullable: true
+              payment_flag:
+                type: string
+                format: "半角数字"
+                description: |
+                              返済可否
+                              '0':利用可 '1':利用不可  
+                example: '0'
+                x-nullable: true
+
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/personal_transfers/submissions:
+    post:
+      tags: [personal_transfers]
+      summary: 振替実行
+      description: 指定した口座へ振替を行う。
+      operationId: submitPersonalTransfersRequest
+      consumes:
+        - application/json
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - in: body
+          name: request_body
+          required: true
+          description: |
+                        振替実行情報
+          schema:
+            type: object
+            required:
+            - account_id
+            - remote_branch_code
+            - remote_account_type_code
+            - remote_account_number
+            - transfer_amount
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                description: |
+                              口座識別子  
+                              口座一覧照会で取得した口座識別子を設定する。
+                example: 'p-1-y-1'
+                minLength: 7
+                maxLength: 29
+              auto_manual_mode:
+                type: string
+                description: |
+                              自動手動モード  
+                              auto=自動 manual=手動  
+                              利用者操作契機による要求には「手動」、それ以外の契機の場合は「自動」を設定する。
+                example: 'auto'
+                enum:
+                  - 'auto'
+                  - 'manual'
+              remote_branch_code:
+                type: string
+                format: "半角数字"
+                description: |
+                              振替先支店コード
+                example: '001'
+                minLength: 3
+                maxLength: 3
+              remote_account_type_code:
+                type: string
+                format: "半角数字"
+                description: |
+                              振替先預金種目コード
+                example: '1'
+                minLength: 1
+                maxLength: 1
+              remote_account_number:
+                type: string
+                format: "半角数字"
+                description: |
+                              振替先口座番号
+                example: '1234567'
+                minLength: 1
+                maxLength: 7
+              transfer_amount:
+                type: number
+                description: |
+                              振替金額
+                example: 10000
+                minimum: 1
+                maximum: 99999999999
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - transaction_id
+            properties:
+              transaction_id:
+                type: string
+                format: "半角数字"
+                example: '1231001'
+                description: |
+                              受付番号
+                x-nullable: false
+                minLength: 7
+                maxLength: 7
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/registration_transfers/registration_accounts:
+    get:
+      tags: [registration_transfers]
+      summary: 事前登録口座情報取得
+      description: |
+                    利用者が金融機関に事前登録申請を行った振込先口座リストを取得する。
+      operationId: submitRegistrationAccountsRequest
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - $ref: '#/parameters/AutoManualModeQuery'
+        - in: query
+          name: account_id
+          description: |
+                        口座識別子  
+                        /accountsで取得した口座識別子を設定する。
+          required: true
+          format: "半角英数字記号"
+          type: string
+          x-nullable: false
+          x-example: 'p-12345678-y-1234'
+          minLength: 7
+          maxLength: 29
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - account_id
+              - count
+              - registration_accounts
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                example: 'p-12345678-y-1234'
+                description: |
+                              口座識別子
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              count:
+                type: integer
+                example: 3
+                description: |
+                              対象口座件数 
+                x-nullable: false
+                minimum: 0
+                maximum: 999
+              registration_accounts:
+                type: array
+                description: |
+                              事前登録口座情報(リスト)
+                items:
+                  type: object
+                  required:
+                    - regist_number
+                    - beneficiary_bank_code
+                    - beneficiary_bank_name
+                    - beneficiary_branch_code
+                    - beneficiary_branch_name
+                    - account_type_code
+                    - account_type_name
+                    - account_number
+                    - beneficiary_name
+                    - comment
+                  properties:
+                    regist_number:
+                      type: string
+                      format: "半角数字"
+                      example: '123'
+                      description: |
+                                    受取人番号
+                      x-nullable: false
+                      minLength: 3
+                      maxLength: 12
+                    beneficiary_bank_code:
+                      type: string
+                      format: "半角数字"
+                      example: '0001'
+                      description: |
+                                    被仕向金融機関コード
+                      x-nullable: false
+                      minLength: 4
+                      maxLength: 4
+                    beneficiary_bank_name:
+                      type: string
+                      format: "全角（漢字情報あり）半角英数字記号"
+                      example: 'データ銀行'
+                      description: |
+                                    被仕向金融機関名
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 15
+                    beneficiary_branch_code:
+                      type: string
+                      format: "半角数字"
+                      example: '115'
+                      description: |
+                                    被仕向支店コード
+                      x-nullable: false
+                      minLength: 3
+                      maxLength: 3
+                    beneficiary_branch_name:
+                      type: string
+                      format: "全角（漢字情報あり）半角英数字記号"
+                      example: '泉岳寺支店'
+                      description: |
+                                    被仕向支店名
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 27
+                    account_type_code:
+                      type: string
+                      format: "半角数字"
+                      example: '1'
+                      description: |
+                                    被仕向預金種目コード
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 1
+                    account_type_name:
+                      type: string
+                      format: "全角（漢字情報あり）半角英数字記号"
+                      example: '普通預金'
+                      description: |
+                                    被仕向預金種目名
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 10
+                    account_number:
+                      type: string
+                      format: "半角数字"
+                      example: '1234567'
+                      description: |
+                                    被仕向口座番号
+                      x-nullable: false
+                      minLength: 7
+                      maxLength: 7
+                    beneficiary_name:
+                      type: string
+                      format: "全角（漢字情報あり）半角英数字記号"
+                      example: '受取太郎'
+                      description: |
+                                    受取人名
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 48
+                    comment:
+                      type: string
+                      format: "全角（漢字情報あり）半角英数字記号"
+                      example: '家族口座'
+                      description: |
+                                    備考
+                      x-nullable: true
+                      minLength: 1
+                      maxLength: 15
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/registration_transfers/confirmation:
+    post:
+      tags: [registration_transfers]
+      summary: 振込・振替（事前登録）確認
+      description: |
+                    指定した口座への振込・振替（事前登録）確認を依頼する。
+      operationId: submitRegistrationTransferConfirmationRequest
+      consumes:
+        - application/json
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - in: body
+          name: request_body
+          required: true
+          description: |
+                        振込・振替（事前登録）確認
+          schema:
+            type: object
+            required:
+              - account_id
+              - auto_manual_mode
+              - regist_number
+              - beneficiary_bank_code
+              - beneficiary_branch_code
+              - beneficiary_account_type_code
+              - beneficiary_account_number
+              - transfer_amount
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                description: |
+                              口座識別子
+                example: 'p-12345678-y-1234'
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              auto_manual_mode:
+                type: string
+                format: "半角英数字"
+                description: |
+                              自動手動モード
+                              auto=自動 manual=手動
+                example: 'auto'
+                enum:
+                  - 'auto'
+                  - 'manual'
+              regist_number:
+                type: string
+                format: "半角数字"
+                example: '123'
+                description: |
+                              受取人番号
+                x-nullable: false
+                minLength: 3
+                maxLength: 12
+              beneficiary_bank_code:
+                type: string
+                format: "半角数字"
+                example: '0001'
+                description: |
+                              被仕向金融機関コード
+                x-nullable: false
+                minLength: 4
+                maxLength: 4
+              beneficiary_branch_code:
+                type: string
+                format: "半角数字"
+                example: '115'
+                description: |
+                              被仕向支店コード
+                x-nullable: false
+                minLength: 3
+                maxLength: 3
+              beneficiary_account_type_code:
+                type: string
+                format: "半角数字"
+                example: '1'
+                description: |
+                              被仕向預金種目コード
+                x-nullable: false
+                minLength: 1
+                maxLength: 1
+              beneficiary_account_number:
+                type: string
+                format: "半角数字"
+                example: '1234567'
+                description: |
+                              被仕向口座番号
+                x-nullable: false
+                minLength: 1
+                maxLength: 7
+              transfer_amount:
+                type: number
+                format: "半角数字"
+                example: 51000
+                description: |
+                              振込金額
+                x-nullable: false
+                minimum: 1
+                maximum: 99999999999
+              edi_info:
+                type: string
+                format: "半角英数字記号"
+                example: 'ﾒｯｾｰｼﾞ'
+                description: |
+                              ＥＤＩ情報
+                x-nullable: false
+                minLength: 1
+                maxLength: 20
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - account_id
+              - transaction_key
+              - beneficiary_bank_code 
+              - beneficiary_bank_name
+              - beneficiary_branch_code
+              - beneficiary_branch_name
+              - beneficiary_account_type_code
+              - beneficiary_account_type_name
+              - beneficiary_account_number
+              - beneficiary_name
+              - transfer_amount
+              - payment_fee
+              - transfer_designated_date
+              - edi_info
+              - duplicate_transfers_cls
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字"
+                example: 'p-12345678-y-1234'
+                description: |
+                              口座識別子
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              transaction_key:
+                type: string
+                format: "半角英数字"
+                example: 'BCC4AF118EE1A4D2FB4AC2500D9D4093E11AD8CAE4E35DC60E55F4141636B8FF'
+                description: |
+                              振込情報キー
+                x-nullable: false
+                minLength: 32
+                maxLength: 32
+              beneficiary_bank_code :
+                type: string
+                format: "半角数字"
+                example: '0001'
+                description: |
+                              被仕向金融機関コード
+                x-nullable: false
+                minLength: 4
+                maxLength: 4
+              beneficiary_bank_name:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: 'データ銀行'
+                description: |
+                              被仕向金融機関名
+                x-nullable: false
+                minLength: 1
+                maxLength: 15
+              beneficiary_branch_code:
+                type: string
+                format: "半角数字"
+                example: '115'
+                description: |
+                              被仕向支店コード
+                x-nullable: false
+                minLength: 3
+                maxLength: 3
+              beneficiary_branch_name:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: '泉岳寺支店'
+                description: |
+                              被仕向支店名
+                x-nullable: false
+                minLength: 1
+                maxLength: 27
+              beneficiary_account_type_code:
+                type: string
+                format: "半角数字"
+                example: '1'
+                description: |
+                              被仕向預金種目コード
+                x-nullable: false
+                minLength: 1
+                maxLength: 1
+              beneficiary_account_type_name:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: '普通預金'
+                description: |
+                              被仕向預金種目名
+                x-nullable: false
+                minLength: 1
+                maxLength: 10
+              beneficiary_account_number:
+                type: string
+                format: "半角数字"
+                example: '1234567'
+                description: |
+                              被仕向口座番号
+                x-nullable: false
+                minLength: 1
+                maxLength: 7
+              beneficiary_name:
+                type: string
+                format: "半角英数字記号"
+                example: 'ｳｹﾄﾘﾀﾛｳ'
+                description: |
+                              受取人名
+                x-nullable: true
+                minLength: 1
+                maxLength: 48
+              transfer_amount:
+                type: number
+                format: "半角数字"
+                example: 51000
+                description: |
+                              振込金額
+                x-nullable: false
+                minimum: 1
+                maximum: 99999999999
+              payment_fee:
+                type: number
+                format: "半角数字"
+                example: 110
+                description: |
+                              手数料
+                x-nullable: false
+                minimum: 0
+                maximum: 99999999
+              transfer_designated_date:
+                type: string
+                format: "半角英数字記号"
+                example: '2020-01-01'
+                description: |
+                              振込指定日
+                x-nullable: false
+                minLength: 10
+                maxLength: 10
+              edi_info:
+                type: string
+                format: "半角英数字記号"
+                example: 'ﾒｯｾｰｼﾞ'
+                description: |
+                              ＥＤＩ情報
+                x-nullable: true
+                minLength: 1
+                maxLength: 20
+              duplicate_transfers_cls:
+                type: string
+                format: "半角数字"
+                example: '0'
+                description: |
+                              二重振込区分
+                              要求された振込情報と過去の振込情報を照合し、振込指定日、振込先口座、金額が全て同一の取引が存在した場合、二重振込とする。
+                              '0'：「二重振込該当無し」、'1'：「二重振込該当有り」
+                x-nullable: false
+                minLength: 1
+                maxLength: 1
+              _links:
+                type: object
+                required:
+                  - registration_transfers_submissions
+                description: |
+                              リンク  
+                              次に実行するAPIを設定する。
+                properties:
+                  registration_transfers_submissions:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                                  振込・振替（事前登録）実行  
+                                  次にリクエストするURIが振込・振替（事前登録）実行の場合、振込・振替（事前登録）実行のURIを設定する。
+                    properties:
+                      href: 
+                        type: string
+                        format: "半角英数字記号"
+                        description: |
+                                      URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/{bank_code}/registration_transfers/submissions"
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/registration_transfers/submissions:
+    post:
+      tags: [registration_transfers]
+      summary: 振込・振替（事前登録）実行
+      description: |
+                    指定した口座への振込・振替（事前登録）を確定する。
+      operationId: submitRegistrationTransfersSubmissionsRequest
+      consumes:
+        - application/json
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - in: body
+          name: request_body
+          required: true
+          description: |
+                        振込・振替（事前登録）実行
+          schema:
+            type: object
+            required:
+              - account_id
+              - auto_manual_mode
+              - regist_number
+              - beneficiary_bank_code
+              - beneficiary_branch_code
+              - beneficiary_account_type_code
+              - beneficiary_account_number
+              - transfer_amount
+              - payment_fee
+              - transfer_designated_date
+              - transaction_key
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                description: |
+                              口座識別子
+                example: 'p-12345678-y-1234'
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              auto_manual_mode:
+                type: string
+                format: "半角英数字"
+                description: |
+                              自動手動モード
+                              auto=自動 manual=手動
+                example: 'auto'
+                enum:
+                  - 'auto'
+                  - 'manual'
+              regist_number:
+                type: string
+                format: "半角数字"
+                example: '123'
+                description: |
+                              受取人番号
+                x-nullable: false
+                minLength: 3
+                maxLength: 12
+              beneficiary_bank_code:
+                type: string
+                format: "半角数字"
+                example: '0001'
+                description: |
+                              被仕向金融機関コード
+                x-nullable: false
+                minLength: 4
+                maxLength: 4
+              beneficiary_branch_code:
+                type: string
+                format: "半角数字"
+                example: '115'
+                description: |
+                              被仕向支店コード
+                x-nullable: false
+                minLength: 3
+                maxLength: 3
+              beneficiary_account_type_code:
+                type: string
+                format: "半角数字"
+                example: '1'
+                description: |
+                              被仕向預金種目コード
+                x-nullable: false
+                minLength: 1
+                maxLength: 1
+              beneficiary_account_number:
+                type: string
+                format: "半角数字"
+                example: '1234567'
+                description: |
+                              被仕向口座番号
+                x-nullable: false
+                minLength: 1
+                maxLength: 7
+              beneficiary_name:
+                type: string
+                format: "半角英数字記号"
+                example: 'ｳｹﾄﾘﾀﾛｳ'
+                description: |
+                              受取人名
+                x-nullable: false
+                minLength: 1
+                maxLength: 48
+              transfer_amount:
+                type: number
+                format: "半角数字"
+                example: 51000
+                description: |
+                              振込金額
+                x-nullable: false
+                minimum: 1
+                maximum: 99999999999
+              payment_fee:
+                type: number
+                format: "半角数字"
+                example: 110
+                description: |
+                              手数料
+                x-nullable: false
+                minimum: 0
+                maximum: 99999999
+              transfer_designated_date:
+                type: string
+                format: "半角英数字記号"
+                example: '2018-01-01'
+                description: |
+                              振込指定日
+                x-nullable: false
+                minLength: 10
+                maxLength: 10
+              edi_info:
+                type: string
+                format: "半角英数字記号"
+                example: 'ﾒｯｾｰｼﾞ'
+                description: |
+                              ＥＤＩ情報
+                x-nullable: false
+                minLength: 1
+                maxLength: 20
+              transaction_key:
+                type: string
+                format: "半角英数字"
+                example: 'BCC4AF118EE1A4D2FB4AC2500D9D4093E11AD8CAE4E35DC60E55F4141636B8FF'
+                description: |
+                              振込情報キー
+                x-nullable: false
+                minLength: 32
+                maxLength: 32
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - account_id
+              - deposit_id
+              - beneficiary_bank_code 
+              - beneficiary_bank_name
+              - beneficiary_branch_code
+              - beneficiary_branch_name
+              - beneficiary_account_type_code
+              - beneficiary_account_type_name
+              - beneficiary_account_number
+              - beneficiary_name
+              - transfer_amount
+              - payment_fee
+              - transfer_designated_date
+              - edi_info
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字"
+                example: 'p-12345678-y-1234'
+                description: |
+                              口座識別子
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              deposit_id:
+                type: string
+                format: "半角数字"
+                example: '0514001'
+                description: |
+                              受付番号
+                x-nullable: false
+                minLength: 7
+                maxLength: 7
+              beneficiary_bank_code :
+                type: string
+                format: "半角数字"
+                example: '0001'
+                description: |
+                              被仕向金融機関コード
+                x-nullable: false
+                minLength: 4
+                maxLength: 4
+              beneficiary_bank_name:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: 'データ銀行'
+                description: |
+                              被仕向金融機関名
+                x-nullable: false
+                minLength: 1
+                maxLength: 15
+              beneficiary_branch_code:
+                type: string
+                format: "半角数字"
+                example: '115'
+                description: |
+                              被仕向支店コード
+                x-nullable: false
+                minLength: 3
+                maxLength: 3
+              beneficiary_branch_name:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: '泉岳寺支店'
+                description: |
+                              被仕向支店名
+                x-nullable: false
+                minLength: 1
+                maxLength: 27
+              beneficiary_account_type_code:
+                type: string
+                format: "半角数字"
+                example: '1'
+                description: |
+                              被仕向預金種目コード
+                x-nullable: false
+                minLength: 1
+                maxLength: 1
+              beneficiary_account_type_name:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: '普通預金'
+                description: |
+                              被仕向預金種目名
+                x-nullable: false
+                minLength: 1
+                maxLength: 10
+              beneficiary_account_number:
+                type: string
+                format: "半角数字"
+                example: '1234567'
+                description: |
+                              被仕向口座番号
+                x-nullable: false
+                minLength: 1
+                maxLength: 7
+              beneficiary_name:
+                type: string
+                format: "半角英数字記号"
+                example: 'ｳｹﾄﾘﾀﾛｳ'
+                description: |
+                              受取人名
+                x-nullable: true
+                minLength: 1
+                maxLength: 48
+              transfer_amount:
+                type: number
+                format: "半角数字"
+                example: 51000
+                description: |
+                              振込金額
+                x-nullable: false
+                minimum: 1
+                maximum: 99999999999
+              payment_fee:
+                type: number
+                format: "半角数字"
+                example: 110
+                description: |
+                              手数料
+                x-nullable: false
+                minimum: 0
+                maximum: 99999999
+              transfer_designated_date:
+                type: string
+                format: "半角英数字記号"
+                example: '2020-01-01'
+                description: |
+                              振込指定日
+                x-nullable: false
+                minLength: 10
+                maxLength: 10
+              edi_info:
+                type: string
+                format: "半角英数字記号"
+                example: 'ﾒｯｾｰｼﾞ'
+                description: |
+                              ＥＤＩ情報
+                x-nullable: true
+                minLength: 1
+                maxLength: 20
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/registration_apiservice_settlements/confirmations:
+    post:
+      tags: [registration_apiservice_settlements]
+      summary: 振込・振替（ＡＰＩ連携サービス決済）確認
+      description: |
+                    ＡＰＩ連携サービス決済口座への振込を依頼する。
+      operationId: confirmRegistrationApiServiceSettlements
+      consumes:
+        - application/json
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - in: body
+          name: request_body
+          required: true
+          description: |
+                        振込・振替（ＡＰＩ連携サービス決済）確認
+          schema:
+            type: object
+            required:
+              - account_id
+              - transfer_amount
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                description: |
+                              口座識別子
+                example: 'p-12345678-y-1234'
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              auto_manual_mode:
+                type: string
+                description: |
+                              自動手動モード
+                              auto=自動 manual=手動
+                example: 'auto'
+                enum:
+                  - 'auto'
+                  - 'manual'
+              transfer_amount:
+                type: number
+                example: 51000
+                description: |
+                              振込金額
+                x-nullable: false
+                minimum: 1
+                maximum: 99999999999
+              edi_info:
+                type: string
+                format: "半角英数字記号"
+                example: 'ﾒｯｾｰｼﾞ'
+                description: |
+                              ＥＤＩ情報
+                x-nullable: false
+                minLength: 1
+                maxLength: 20
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - account_id
+              - transaction_key
+              - beneficiary_branch_code
+              - beneficiary_branch_name
+              - beneficiary_account_type_code
+              - beneficiary_account_type_name
+              - beneficiary_account_number
+              - beneficiary_name
+              - transfer_amount
+              - payment_fee
+              - transfer_designated_date
+              - edi_info
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                example: 'p-12345678-y-1234'
+                description: |
+                              口座識別子
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              transaction_key:
+                type: string
+                format: "半角英数字"
+                example: 'BCC4AF118EE1A4D2FB4AC2500D9D4093E11AD8CAE4E35DC60E55F4141636B8FF'
+                description: |
+                              振込情報キー
+                x-nullable: false
+                minLength: 32
+                maxLength: 32
+              beneficiary_branch_code:
+                type: string
+                format: "半角数字"
+                example: '115'
+                description: |
+                              被仕向支店コード
+                x-nullable: false
+                minLength: 3
+                maxLength: 3
+              beneficiary_branch_name:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: '泉岳寺支店'
+                description: |
+                              被仕向支店名
+                x-nullable: false
+                minLength: 1
+                maxLength: 30
+              beneficiary_account_type_code:
+                type: string
+                format: "半角数字"
+                example: '1'
+                description: |
+                              被仕向預金種目コード
+                x-nullable: false
+                minLength: 1
+                maxLength: 1
+              beneficiary_account_type_name:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: '普通預金'
+                description: |
+                              被仕向預金種目名
+                x-nullable: true
+                minLength: 1
+                maxLength: 10
+              beneficiary_account_number:
+                type: string
+                format: "半角数字"
+                example: '1234567'
+                description: |
+                              被仕向口座番号
+                x-nullable: false
+                minLength: 1
+                maxLength: 7
+              beneficiary_name:
+                type: string
+                format: "半角英数字記号"
+                example: 'ｳｹﾄﾘﾀﾛｳ'
+                description: |
+                              受取人名
+                x-nullable: true
+                minLength: 1
+                maxLength: 48
+              transfer_amount:
+                type: number
+                example: 51000
+                description: |
+                              振込金額
+                x-nullable: false
+                minimum: 1
+                maximum: 99999999999
+              payment_fee:
+                type: number
+                example: 110
+                description: |
+                              手数料
+                x-nullable: false
+                minimum: 0
+                maximum: 99999999
+              transfer_designated_date:
+                type: string
+                format: date
+                example: '2020-01-01'
+                description: |
+                              振込指定日
+                x-nullable: false
+                minLength: 10
+                maxLength: 10
+              edi_info:
+                type: string
+                format: "半角英数字記号"
+                example: 'ﾒﾂｾｰｼﾞ'
+                description: |
+                              ＥＤＩ情報
+                x-nullable: true
+                minLength: 1
+                maxLength: 20
+              _links:
+                type: object
+                required:
+                  - registration_apiservice_settlements_submissions
+                description: |
+                              リンク  
+                              次に実行するAPIを設定する。
+                properties:
+                  registration_apiservice_settlements_submissions:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                                  振込・振替（ＡＰＩ連携サービス決済）実行  
+                                  次にリクエストするURIが振込・振替（ＡＰＩ連携サービス決済）実行の場合、振込・振替（ＡＰＩ連携サービス決済）実行のURIを設定する。
+                    properties:
+                      href: 
+                        type: string
+                        format: "半角英数字記号"
+                        description: |
+                                      URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/{bank_code}/registration_apiservice_settlements/submissions"
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/registration_apiservice_settlements/submissions:
+    post:
+      tags: [registration_apiservice_settlements]
+      summary: 振込・振替（ＡＰＩ連携サービス決済）実行
+      description: |
+                    ＡＰＩ連携サービス決済口座への振込を確定する。
+      operationId: submitRegistrationApiServiceSettlements
+      consumes:
+        - application/json
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - in: body
+          name: request_body
+          required: true
+          description: |
+                        振込・振替（ＡＰＩ連携サービス決済）実行
+          schema:
+            type: object
+            required:
+              - account_id
+              - beneficiary_branch_code
+              - beneficiary_account_type_code
+              - beneficiary_account_number
+              - transfer_amount
+              - payment_fee
+              - transfer_designated_date
+              - transaction_key
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                description: |
+                              口座識別子
+                example: 'p-12345678-y-1234'
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              auto_manual_mode:
+                type: string
+                description: |
+                              自動手動モード
+                              auto=自動 manual=手動
+                example: 'auto'
+                enum:
+                  - 'auto'
+                  - 'manual'
+              beneficiary_branch_code:
+                type: string
+                format: "半角数字"
+                example: '115'
+                description: |
+                              被仕向支店コード
+                x-nullable: false
+                minLength: 3
+                maxLength: 3
+              beneficiary_account_type_code:
+                type: string
+                format: "半角数字"
+                example: '1'
+                description: |
+                              被仕向預金種目コード
+                x-nullable: false
+                minLength: 1
+                maxLength: 1
+              beneficiary_account_number:
+                type: string
+                format: "半角数字"
+                example: '1234567'
+                description: |
+                              被仕向口座番号
+                x-nullable: false
+                minLength: 1
+                maxLength: 7
+              beneficiary_name:
+                type: string
+                format: "半角英数字記号"
+                example: 'ｳｹﾄﾘﾀﾛｳ'
+                description: |
+                              受取人名
+                x-nullable: false
+                minLength: 1
+                maxLength: 48
+              transfer_amount:
+                type: number
+                example: 51000
+                description: |
+                              振込金額
+                x-nullable: false
+                minimum: 1
+                maximum: 99999999999
+              payment_fee:
+                type: number
+                example: 110
+                description: |
+                              手数料
+                x-nullable: false
+                minimum: 0
+                maximum: 99999999
+              transfer_designated_date:
+                type: string
+                format: date
+                example: '2020-01-01'
+                description: |
+                              振込指定日
+                x-nullable: false
+                minLength: 10
+                maxLength: 10
+              edi_info:
+                type: string
+                format: "半角英数字記号"
+                example: 'ﾒﾂｾｰｼﾞ'
+                description: |
+                              ＥＤＩ情報
+                x-nullable: false
+                minLength: 1
+                maxLength: 20
+              transaction_key:
+                type: string
+                format: "半角英数字"
+                example: 'BCC4AF118EE1A4D2FB4AC2500D9D4093E11AD8CAE4E35DC60E55F4141636B8FF'
+                description: |
+                              振込情報キー
+                x-nullable: false
+                minLength: 32
+                maxLength: 32
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - account_id
+              - deposit_id
+              - beneficiary_branch_code
+              - beneficiary_branch_name
+              - beneficiary_account_type_code
+              - beneficiary_account_type_name
+              - beneficiary_account_number
+              - beneficiary_name
+              - transfer_amount
+              - payment_fee
+              - transfer_designated_date
+              - edi_info
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                example: 'p-12345678-y-1234'
+                description: |
+                              口座識別子
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              deposit_id:
+                type: string
+                format: "半角数字"
+                example: '0514001'
+                description: |
+                              受付番号
+                x-nullable: false
+                minLength: 7
+                maxLength: 7
+              beneficiary_branch_code:
+                type: string
+                format: "半角数字"
+                example: '115'
+                description: |
+                              被仕向支店コード
+                x-nullable: false
+                minLength: 3
+                maxLength: 3
+              beneficiary_branch_name:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: '泉岳寺支店'
+                description: |
+                              被仕向支店名
+                x-nullable: false
+                minLength: 1
+                maxLength: 30
+              beneficiary_account_type_code:
+                type: string
+                format: "半角数字"
+                example: '1'
+                description: |
+                              被仕向預金種目コード
+                x-nullable: false
+                minLength: 1
+                maxLength: 1
+              beneficiary_account_type_name:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: '普通預金'
+                description: |
+                              被仕向預金種目名
+                x-nullable: true
+                minLength: 1
+                maxLength: 10
+              beneficiary_account_number:
+                type: string
+                format: "半角数字"
+                example: '1234567'
+                description: |
+                              被仕向口座番号
+                x-nullable: false
+                minLength: 1
+                maxLength: 7
+              beneficiary_name:
+                type: string
+                format: "半角英数字記号"
+                example: 'ｳｹﾄﾘﾀﾛｳ'
+                description: |
+                              受取人名
+                x-nullable: true
+                minLength: 1
+                maxLength: 48
+              transfer_amount:
+                type: number
+                example: 51000
+                description: |
+                              振込金額
+                x-nullable: false
+                minimum: 1
+                maximum: 99999999999
+              payment_fee:
+                type: number
+                example: 110
+                description: |
+                              手数料
+                x-nullable: false
+                minimum: 0
+                maximum: 99999999
+              transfer_designated_date:
+                type: string
+                format: date
+                example: '2020-01-01'
+                description: |
+                              振込指定日
+                x-nullable: false
+                minLength: 10
+                maxLength: 10
+              edi_info:
+                type: string
+                format: "半角英数字記号"
+                example: 'ﾒﾂｾｰｼﾞ'
+                description: |
+                              ＥＤＩ情報
+                x-nullable: true
+                minLength: 1
+                maxLength: 20
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/userinfo:
+    get:
+      tags: [personal_information]
+      summary: 契約者情報照会
+      description: |
+                    AnserParaSOL契約者の情報を照会する。  
+                    各応答項目にnullが設定される条件は以下のとおり。  
+                    ・金融機関の設定や契約者情報の登録状態によりデータが存在しない場合  
+                    ・金融機関よりデータ提供を許可されていない場合
+      operationId: getUserInfo
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        -  name: X-COMPANY-SERVICE-ID
+           in: header
+           description: |
+                         データ提供先企業ID  
+                         API連携事業者が本APIの応答結果を第三者に提供する場合、提供先の企業を一意に識別可能なIDを設定する。
+           type: string
+           format: "半角英数字および-(半角ハイフン)"
+           required: false
+           x-example: '0000000001'
+           minLength: 1
+           maxLength: 50
+        -  name: X-API-LINK-INQUIRY-NO
+           in: header
+           description: |
+                         API連携事業者取引照会番号  
+                         API連携事業者が本APIの取引を一意に識別する必要がある場合、本項目に一意に識別可能なIDを設定する。
+           type: string
+           format: "半角英数字および-(半角ハイフン)"
+           required: false
+           x-example: '20200301-00000000001'
+           minLength: 1
+           maxLength: 50
+        - $ref: '#/parameters/BankCodePath'
+        - $ref: '#/parameters/AutoManualModeQuery'
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - name
+              - kana_name
+              - gender
+              - age
+              - birthdate
+              - postal_code
+              - address
+              - kana_address
+              - phone_number
+              - mobile_phone_number
+              - office_name
+              - kana_office_name
+              - office_phone_number
+              - identity_verified
+              - personality
+              - overseas_address
+              - kanji_overseas_address
+              - reserved_item_1
+              - reserved_item_2
+              - reserved_item_3
+            properties:
+              name:
+                type: string
+                format: "全角（漢字情報あり）英数字記号"
+                example: '試験　太郎'
+                description: |
+                              漢字氏名
+                              
+                x-nullable: true
+                minLength: 1
+                maxLength: 30
+              kana_name:
+                type: string
+                format: "半角英数字記号"
+                example: 'ｼｹﾝ ﾀﾛｳ'
+                description: |
+                              カナ氏名
+                x-nullable: true
+                minLength: 1
+                maxLength: 60
+              gender:
+                type: string
+                example: 'male'
+                description: |
+                              性別  
+                              男性：male  
+                              女性：female  
+                              性別を特定できない場合はnullを応答する。
+                x-nullable: true
+                enum:
+                  - 'male'
+                  - 'female'
+              age:
+                type: string
+                format: "半角数字"
+                example: '20'
+                description: |
+                              年齢
+                x-nullable: true
+                minLength: 1
+                maxLength: 3
+              birthdate:
+                type: string
+                format: date
+                example: '2020-03-01'
+                description: |
+                              生年月日
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              postal_code:
+                type: string
+                format: "半角数字"
+                example: '1234567'
+                description: |
+                              郵便番号
+                x-nullable: true
+                minLength: 3
+                maxLength: 7
+              address:
+                type: string
+                format: "全角（漢字情報あり）英数字記号"
+                example: '住所'
+                description: |
+                              住所
+                x-nullable: true
+                minLength: 1
+                maxLength: 100
+              kana_address:
+                type: string
+                format: "半角英数字記号"
+                example: 'ｼﾞｭｳｼｮ'
+                description: |
+                              カナ住所
+                x-nullable: true
+                minLength: 1
+                maxLength: 200
+              phone_number:
+                type: string
+                format: "半角数字および-(半角ハイフン)"
+                example: '03-3000-1234'
+                description: |
+                              電話番号
+                x-nullable: true
+                minLength: 1
+                maxLength: 20
+              mobile_phone_number:
+                type: string
+                format: "半角数字および-(半角ハイフン)"
+                example: '090-0012-3456'
+                description: |
+                              携帯電話番号
+                x-nullable: true
+                minLength: 1
+                maxLength: 20
+              office_name:
+                type: string
+                format: "全角（漢字情報あり）英数字記号"
+                example: '住所'
+                description: |
+                              勤務先
+                x-nullable: true
+                minLength: 1
+                maxLength: 50
+              kana_office_name:
+                type: string
+                format: "半角英数字記号"
+                example: 'ｼﾞｭｳｼｮ'
+                description: |
+                              カナ勤務先
+                x-nullable: true
+                minLength: 1
+                maxLength: 100
+              office_phone_number:
+                type: string
+                format: "半角数字および-(半角ハイフン)"
+                example: '03-3000-1234'
+                description: |
+                              勤務先電話番号
+                x-nullable: true
+                minLength: 1
+                maxLength: 20
+              identity_verified:
+                type: boolean
+                example: true
+                description: |
+                              本人確認状態  
+                              本人確認済：true  
+                              本人確認未済：false
+                x-nullable: true
+              personality:
+                type: string
+                example: 'personal'
+                description: |
+                              人格  
+                              個人格：personal  
+                              法人格：legal
+                x-nullable: true
+                enum:
+                  - 'personal'
+                  - 'legal'
+              overseas_address:
+                type: string
+                format: "半角英数字記号"
+                example: 'address'
+                description: |
+                              海外住所
+                x-nullable: true
+                minLength: 1
+                maxLength: 200
+              kanji_overseas_address:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: 'ａｄｄｒｅｓｓ'
+                description: |
+                              漢字海外住所
+                x-nullable: true
+                minLength: 1
+                maxLength: 200
+              reserved_item_1:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: '予備項目１'
+                description: |
+                              予備項目１
+                x-nullable: true
+                minLength: 1
+                maxLength: 100
+              reserved_item_2:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: '予備項目２'
+                description: |
+                              予備項目２
+                x-nullable: true
+                minLength: 1
+                maxLength: 100
+              reserved_item_3:
+                type: string
+                format: "全角（漢字情報あり）半角英数字記号"
+                example: '予備項目３'
+                description: |
+                              予備項目３
+                x-nullable: true
+                minLength: 1
+                maxLength: 100
+          headers:
+            X-API-LINK-INQUIRY-NO:
+              type: string
+              format: "半角英数字および-(半角ハイフン)"
+              x-example: '20200301-00000000001'
+              description: |
+                            API連携事業者取引照会番号  
+                            リクエストで設定されたものと同一の値を応答する。リクエストで設定されていない場合はヘッダごと存在しない。
+              x-nullable: false
+              minLength: 1
+              maxLength: 50
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+  /banks/{bank_code}/person_authentication:
+    get:
+      tags: [person_authentication]
+      summary: 本人認証連携
+      description: |
+                    本人認証連携で認証が完了した口座情報を照会する。
+      operationId: getPersonAuthentication
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - $ref: '#/parameters/AutoManualModeQuery'
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - inqury_data
+              - authentication_type
+              - authentication_date
+              - authentication_time
+            properties:
+              inqury_data:
+                type: array
+                description: |
+                              口座情報(リスト)
+                items:
+                  type: object
+                  required:
+                    - branch_code
+                    - branch_name
+                    - account_type_code
+                    - account_type_name
+                    - account_number
+                  properties:
+                    branch_code:
+                      type: string
+                      format: "半角数字"
+                      example: '115'
+                      description: |
+                                    支店コード
+                      x-nullable: false
+                      minLength: 3
+                      maxLength: 3
+                    branch_name:
+                      type: string
+                      format: "全角（漢字情報あり）半角英数字記号"
+                      example: '泉岳寺支店'
+                      description: |
+                                    支店名
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 30
+                    account_type_code:
+                      type: string
+                      format: "半角数字"
+                      example: '1'
+                      description: |
+                                    預金種目コード
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 1
+                    account_type_name:
+                      type: string
+                      format: "全角（漢字情報あり）半角英数字記号"
+                      example: '普通'
+                      description: |
+                                    預金種目名
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 10
+                    account_number:
+                      type: string
+                      format: "半角数字"
+                      example: '1234567'
+                      description: |
+                                    口座番号
+                      x-nullable: false
+                      minLength: 1
+                      maxLength: 7
+              authentication_type:
+                type: string
+                example: "otp"
+                description: |
+                              認証方式
+                              'otp':otp認証
+                x-nullable: false
+                enum:
+                 - 'otp'
+              authentication_date:
+                type: string
+                format: date
+                example: "2020-03-01"
+                description: |
+                              認証日付
+                x-nullable: false
+                minLength: 10
+                maxLength: 10
+              authentication_time:
+                type: string
+                format: "半角数字記号"
+                example: "12:30:15+09:00"
+                description: |
+                              認証時刻
+                              hh:mm:ss+09:00の形式で時刻を返却する。
+                x-nullable: false
+                minLength: 14
+                maxLength: 14
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '404':
+          description: 'Not Found'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+parameters:
+  AuthorizationHeaderBasic:
+    in: header
+    name: Authorization
+    description: |
+                  クライアント識別子・パスワード  
+                  Basic認証  
+                  クライアント識別子とクライアントパスワードをBASE64でエンコードした値を設定する。
+    required: true
+    type: string
+    format: "半角英数字記号"
+    x-example: 'Basic MDAxOnBhc3MwMDE='
+  AuthorizationHeaderBearer:
+    in: header
+    name: Authorization
+    description: |
+                   アクセストークン  
+                   アクセストークンをBearer認証の形で設定する。
+    type: string
+    format: "半角英数字記号"
+    required: true
+    x-example: 'Bearer ca5723130d3042eea0a6e6b7a97d0100'
+  XFFHeader:
+    in: header
+    name: X-Forwarded-For
+    description: |
+                   X-Forwarded-For  
+                   先頭に利用者端末のIPアドレス(v4)を設定する。 
+    type: string
+    format: "半角数字記号"
+    required: false
+    x-example: '192.168.0.1, 192.168.0.2'
+  BankCodePath:
+    in: path
+    name: bank_code
+    description: |
+                  金融機関コード
+    required: true
+    type: string
+    format: "半角数字"
+    x-example: '0001'
+    minLength: 4
+    maxLength: 4
+  AccountIdPath:
+    in: path
+    name: account_id
+    description: |
+            口座識別子  
+            /accountsで取得した口座識別子を設定する。
+    required: true
+    type: string
+    format: "半角英数字記号"
+    x-example: 'p-1-y-1'
+    minLength: 7
+    maxLength: 29
+  AutoManualModeQuery:
+    in: query
+    name: auto_manual_mode
+    description: |
+                  自動手動モード  
+                  auto=自動 manual=手動  
+                  利用者操作契機による要求には「手動」、それ以外の契機の場合は「自動」を設定する。 
+    required: false
+    type: string
+    x-example: 'auto'
+    enum:
+      - 'auto'
+      - 'manual'
+definitions:
+  AccountResponse:
+      type: object
+      required:
+        - count
+        - accounts
+        - errors
+      properties:
+        count:
+          type: integer
+          example: 10
+          description: |
+                        口座数  
+                        口座一覧照会の場合は取得した口座の件数を、口座情報照会の場合は1を返却する。
+          x-nullable: false
+          minimum: 0
+          maximum: 999
+        accounts:
+          type: array
+          description: |
+                        口座一覧(リスト)  
+                        対象の口座が存在しない場合、空のリストを返却する。
+          items:
+            type: object
+            required:
+              - account_id
+              - account_name
+              - branch_code
+              - branch_name
+              - account_type_code
+              - account_type
+              - account_number
+              - account_branch_number
+              - investment_trust_account_type
+              - currency_code
+              - ttb
+              - rate_base_date
+              - rate_base_time
+              - current_balance
+              - withdrawable_balance
+              - previous_day_balance
+              - previous_month_balance
+              - stage_name
+              - point
+              - interest_rate
+              - base_date
+              - base_time
+              - online_transaction_date_from
+              - offline_transaction_date_from
+              - cardloan_possible_balance
+              - cardloan_interest_amount
+              - _links
+              - division_for_personal_transfers
+              - payout_limited_account_division
+              - error
+              - error_description
+            properties:
+              account_id:
+                type: string
+                format: "半角英数字記号"
+                example: 'p-12345678-y-1234'
+                description: |
+                              口座識別子
+                x-nullable: false
+                minLength: 7
+                maxLength: 29
+              account_name:
+                type: string
+                format: "半角全角"
+                example: '本店営業部　普通　USD'
+                description: |
+                              口座名  
+                              支店名と科目名をスペース区切りで結合し設定する。  
+                              外貨口座の場合は、ISO4217で規定されている通貨コードもスペース区切りで結合し設定する。
+                x-nullable: false
+                minLength: 3
+                maxLength: 45
+              branch_code:
+                type: string
+                format: "半角数字"
+                example: '001'
+                description: |
+                              支店コード
+                x-nullable: false
+                minLength: 3
+                maxLength: 3
+              branch_name:
+                type: string
+                format: "半角全角"
+                example: '本店営業部'
+                description: |
+                              支店名
+                x-nullable: false
+                minLength: 1
+                maxLength: 30
+              account_type_code:
+                type: string
+                format: "半角英数字"
+                example: '1'
+                description: |
+                              預金種目コード  
+                              円貨口座の場合は1-9、外貨口座の場合はA-I、投信口座の場合はNullを設定する。
+                x-nullable: true
+                minLength: 1
+                maxLength: 1
+              account_type:
+                type: string
+                format: "全角"
+                example: '普通'
+                description: |
+                              預金種目名
+                x-nullable: false
+                minLength: 1
+                maxLength: 10
+              account_number:
+                type: string
+                format: "半角数字"
+                example: '1234567'
+                description: |
+                              口座番号
+                x-nullable: false
+                minLength: 1
+                maxLength: 10
+              account_branch_number:
+                type: string
+                format: "半角数字"
+                example: '0'
+                description: |
+                              口座枝番  
+                              該当する口座が外貨口座の場合、口座枝番を設定する。  
+                              外貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minLength: 1
+                maxLength: 5
+              investment_trust_account_type:
+                type: string
+                example: 'general'
+                description: |
+                              投信口座種類  
+                              該当する口座が投信口座の場合、投信口座種類を設定する。  
+                              general=一般  
+                              specific_withholding=特定口座/源泉徴収あり  
+                              specific_not_withholding=特定口座/源泉徴収なし  
+                              投信口座以外の場合、Nullを設定する。
+                x-nullable: true
+                enum:
+                 - 'general'
+                 - 'specific_withholding'
+                 - 'specific_not_withholding'
+              currency_code:
+                type: string
+                format: "半角英字"
+                example: 'USD'
+                description: |
+                              通貨コード  
+                              ISO4217で規定されているコードを設定する。
+                x-nullable: false
+                minLength: 3
+                maxLength: 3
+              ttb:
+                type: number
+                example: 100.55
+                description: |
+                              外貨払出適用レート  
+                              外貨払出適用レート(TTB)を設定する。  
+                              外貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minimum: 0
+                maximum: 999999.99
+              rate_base_date:
+                type: string
+                format: date
+                example: '2018-01-01'
+                description: |
+                              外貨レート基準日  
+                              外貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              rate_base_time:
+                type: string
+                format: "半角数字記号"
+                example: '12:30:00+09:00'
+                description: |
+                              外貨レート基準時刻  
+                              レートの設定時刻をhh:mm:00+09:00の形式で時刻を返却する。  
+                              外貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minLength: 14
+                maxLength: 14
+              current_balance:
+                type: number
+                example: 2200000
+                description: |
+                             現在残高  
+                             外貨口座の場合、外貨残高を設定する。（円換算額でない）  
+                             投信口座の場合、評価金額を設定する。
+                x-nullable: true
+                minimum: -999999999999.99
+                maximum: 999999999999999
+              withdrawable_balance:
+                type: number
+                example: 3200000
+                description: |
+                              支払可能残高  
+                              円貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999999
+              previous_day_balance:
+                type: number
+                example: 2000000
+                description: |
+                              前日残高  
+                              円貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minimum: -99999999999
+                maximum: 99999999999
+              previous_month_balance:
+                type: number
+                example: 1200000
+                description: |
+                              前月末残高  
+                              円貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minimum: -99999999999
+                maximum: 99999999999
+              stage_name:
+                type: string
+                format: "全角"
+                example: 'XXXステージ'
+                description: |
+                              ステージ名  
+                              円貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minLength: 1
+                maxLength: 16
+              point:
+                type: number
+                example: 0
+                description: |
+                             ポイント  
+                             円貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minimum: 1
+                maximum: 99999999999
+              interest_rate:
+                type: number
+                example: 0.002
+                description: |
+                              金利  
+                              外貨口座以外の場合、Nullを設定する。
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999
+              base_date:
+                type: string
+                format: date
+                example: '2018-01-01'
+                description: |
+                              基準日
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              base_time:
+                type: string
+                format: "半角数字記号"
+                example: '12:30:00+09:00'
+                description: |
+                              基準時刻  
+                              hh:mm:00+09:00の形式で時刻を返却する。  
+                              投信口座の場合、Nullを返却する。
+                x-nullable: true
+                minLength: 14
+                maxLength: 14
+              online_transaction_date_from:
+                type: string
+                format: date
+                example: '2017-03-01'
+                description: |
+                              オンライン照会方式照会可能開始日  
+                              オンライン方式で取得可能な入出金取引明細範囲指定開始日付をYYYY-MM-DD形式で設定する。
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              offline_transaction_date_from:
+                type: string
+                format: date
+                example: '2016-03-01'
+                description: |
+                              オフライン照会方式照会可能開始日  
+                              オフライン方式で取得可能な入出金取引明細範囲指定開始日付をYYYY-MM-DD形式で設定する。
+                x-nullable: true
+                minLength: 10
+                maxLength: 10
+              cardloan_possible_balance:
+                type: number
+                example: 1000000
+                description: |
+                              カードローン借入可能額
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999999
+              cardloan_interest_amount:
+                type: number
+                example: 7350
+                description: |
+                              カードローン利息
+                x-nullable: true
+                minimum: 0
+                maximum: 99999999999
+              division_for_personal_transfers:
+                type: string
+                example: '0'
+                description: |
+                              振込・振替（振替）先設定区分  
+                              円貨口座の場合は'0'：「設定不可」、'1'：「設定可」
+                              円貨口座以外の場合はnullを返却する。
+                x-nullable: true
+                minLength: 1
+                maxLength: 1
+              payout_limited_account_division:
+                type: string
+                example: '0'
+                description: |
+                              払出制限口座区分  
+                              円貨口座の場合は'0'：「制限なし」、'1'：「制限あり」
+                              円貨口座以外の場合はnullを返却する。
+                x-nullable: true
+                minLength: 1
+                maxLength: 1
+              web_passbook_use:
+                type: number
+                example: 1
+                description: |
+                              WEB口座利用区分  
+                              0：「非WEB口座」、1：「WEB口座」
+                x-nullable: false
+                minimum: 0
+                maximum: 1
+              _links:
+                type: object
+                required:
+                  - self
+                description: |
+                              リンク  
+                              本口座に対して実行可能なAPIを設定する。
+                properties:
+                  self:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                                  口座情報照会  
+                                  口座情報照会のURIを設定する。
+                    properties:
+                      href: 
+                        type: string
+                        format: "半角英数字記号"
+                        description: |
+                                      URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/{bank_code}/accounts/{account_id}"
+                  transactions:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                                  入出金明細照会  
+                                  入出金明細照会が実行可能な場合、入出金明細照会のURIを設定する。
+                    properties:
+                      href: 
+                        type: string
+                        format: "半角英数字記号"
+                        description: |
+                                      URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/{bank_code}/accounts/{account_id}/transactions"
+                  term_deposits:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                                  定期保有明細照会  
+                                  定期保有明細照会が実行可能な口座の場合、定期保有明細照会のURIを設定する。
+                    properties:
+                      href: 
+                        type: string
+                        format: "半角英数字記号"
+                        description: |
+                                      URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/9932/{bank_code}/accounts/{account_id}/term_deposits"
+                  funds:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                                  投信保有明細照会  
+                                  投信保有明細照会が実行可能な口座の場合、投信保有明細照会のURIを設定する。
+                    properties:
+                      href: 
+                        type: string
+                        format: "半角英数字記号"
+                        description: |
+                                      URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/{bank_code}/accounts/{account_id}/funds"
+                  card_loan_contracts:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                                  カードローン契約内容照会  
+                                  カードローン契約内容照会が実行可能な口座の場合、カードローン契約内容照会のURIを設定する。
+                    properties:
+                      href: 
+                        type: string
+                        format: "半角英数字記号"
+                        description: |
+                                      URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/{bank_code}/accounts/{account_id}/card_loan_contracts"
+                  personal_transfers_submissions:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                                  振替実行  
+                                  振替実行が実行可能な口座の場合、振替実行のURIを設定する。
+                    properties:
+                      href: 
+                        type: string
+                        format: "半角英数字記号"
+                        description: |
+                                      URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/{bank_code}/personal_transfers/submissions"
+                  registration_transfers_accounts:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                                  事前登録口座情報取得  
+                                  事前登録口座情報取得が実行可能な口座の場合、事前登録口座情報取得のURIを設定する。
+                    properties:
+                      href: 
+                        type: string
+                        format: "半角英数字記号"
+                        description: |
+                                      URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/{bank_code}/registration_transfers/registration_accounts"
+                  registration_transfers_confirmation:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                                  振込・振替（事前登録）  
+                                  振込・振替（事前登録）が実行可能な口座の場合、振込・振替（事前登録）確認のURIを設定する。
+                    properties:
+                      href: 
+                        type: string
+                        format: "半角英数字記号"
+                        description: |
+                                      URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/{bank_code}/registration_transfers/confirmation"
+                  registration_apiservice_settlements_confirmations:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                                  振込・振替（ＡＰＩ連携サービス決済）  
+                                  振込・振替（ＡＰＩ連携サービス決済）が実行可能な口座の場合、振込・振替（ＡＰＩ連携サービス決済）確認のURIを設定する。
+                    properties:
+                      href: 
+                        type: string
+                        format: "半角英数字記号"
+                        description: |
+                                      URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/{bank_code}/registration_apiservice_settlements/confirmations"
+                  investment_profit_and_loss:
+                    type: object
+                    required:
+                      - href
+                    description: |
+                      投信運用損益照会  
+                      投信運用損益照会が実行可能な口座の場合、投信運用損益照会のURIを設定する。
+                    properties:
+                      href:
+                        type: string
+                        format: 半角英数字記号
+                        description: |
+                          URI
+                        example: "https://sample.apigw.opencanvas.ne.jp/parasol/v1/banks/{bank_code}/accounts/{account_id}/investment_profit_and_loss"
+              error:
+                type: string
+                format: "半角英数字"
+                example: 'access_denied'
+                description: |
+                              エラーコード  
+                              口座一覧照会の応答時に一部の口座の残高を取得できなかった場合は対応する口座情報の本項目にエラーコードを設定する。  
+                              口座情報照会の応答時はNullとなる。
+                x-nullable: true
+                minLength: 1
+                maxLength: 256
+              error_description:
+                type: string
+                format: "半角英数字"
+                example: 'congestion occurring.'
+                description: |
+                              エラーメッセージ  
+                              口座一覧照会の応答時に一部の口座の残高を取得できなかった場合は対応する口座情報の本項目にエラーメッセージを設定する。  
+                              口座情報照会の応答時はNullとなる。
+                x-nullable: true
+                minLength: 1
+                maxLength: 256
+        errors:
+          type: array
+          description: |
+                        口座取得エラー一覧(リスト)  
+                        口座一覧照会の応答時に特定の口座種別の情報を取得できなかった場合はエラーコード、エラーメッセージを設定する。  
+                        エラーが存在しない場合、または、口座情報照会の応答時は、空のリストを返却する。
+          items:
+            type: object
+            required:
+              - error
+              - error_description
+            properties:
+              error:
+                type: string
+                format: "半角英数字記号"
+                example: 'access_denied'
+                description: エラーコード
+                x-nullable: true
+                minLength: 1
+                maxLength: 256
+              error_description:
+                type: string
+                format: "半角英数字記号"
+                example: 'congestion occurring.'
+                description: エラーメッセージ
+                x-nullable: true
+                minLength: 1
+                maxLength: 256
+  RFC6749ErrorResponse:
+    type: object
+    required:
+      - error
+      - error_description
+    properties:
+      error:
+        type: string
+        example: 'invalid_request'
+        description: エラーコード
+        x-nullable: false
+      error_description:
+        type: string
+        example: 'invalid parameters requested.'
+        description: エラーメッセージ
+        x-nullable: true
+  RFC7807ErrorResponse:
+    type: object
+    required:
+      - type
+      - title
+      - detail
+    properties:
+      type:
+        type: string
+        format: "半角英数字記号"
+        example: 'about:blank'
+        description: |
+                      エラー種別  
+                      現在は一律で'about:blank'を出力する。
+        x-nullable: false
+      title:
+        type: string
+        format: "半角英数字記号"
+        example: 'invalid_request'
+        description: エラーコード
+        x-nullable: false
+      detail:
+        type: string
+        format: "半角英数字記号"
+        example: 'invalid parameters requested.'
+        description: エラーメッセージ
+        x-nullable: true

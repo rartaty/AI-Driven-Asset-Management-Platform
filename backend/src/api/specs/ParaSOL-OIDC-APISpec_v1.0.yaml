@@ -1,0 +1,669 @@
+swagger: '2.0'
+info:
+  version: '1.0'
+  title:  AnserParaSOL OIDCサービス
+  description: |
+                本サービスでは、金融機関の設定や利用者の利用状況によって特定の項目の返却値が存在しない場合がある。  
+                返却値が存在しない場合、一律Nullを返却する。  
+                ただし、アクセストークン発行について返却値が存在しない場合、項目ごと削除とする。  
+                  
+                本サービスでは以下のステータスコードを応答する。  
+                |HTTPステータスコード|付与基準|
+                |:-:|:-|
+                |200|正常応答|
+                |400|クライアントエラー/口座状態や利用者状態による一時的な照会エラー|
+                |401|Basic認証/Bearer認証エラー|
+                |403|スコープエラー/APIが使用不可|
+                |500|システムエラー|
+                |503|輻輳/閉塞/サービス時間外|
+                |504|タイムアウト|
+  
+  
+                レスポンスのContent-Typeは以下のとおり。  
+                ■アクセストークン発行  
+                  Content-Typeは「application/json;charset=UTF-8」となる。  
+                ■上記以外のAPI  
+                  ステータスコードが200の場合、Content-Typeは「application/json;charset=UTF-8」となる。  
+                  ステータスコードが200以外の場合、Content-Typeは「application/problem+json;charset=UTF-8」となる。
+basePath: /parasol/v1 
+schemes:
+  - https
+host: sample.apigw.opencanvas.ne.jp
+paths:
+  /banks/{bank_code}/oauth/auth:
+    get:
+      tags: [OAuth]
+      summary: OIDC認証
+      description: 利用者に認証・認可を求め、認可の結果を受け取る。
+      operationId: auth
+      parameters:
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - in: query
+          name: response_type
+          description: |
+                        レスポンスタイプ  
+                        「code」のみ許可する。
+          required: true
+          type: string
+          x-example: 'code'
+          enum:
+            - 'code'
+        - in: query
+          name: client_id
+          description: |
+                        クライアント識別子
+          required: true
+          type: string
+          format: "半角英数字"
+          x-example: 'Finte001'
+          minLength: 8
+          maxLength: 8
+        - in: query
+          name: redirect_uri
+          description: |
+                        リダイレクトURL
+          required: true
+          type: string
+          format: "半角英数字記号"
+          x-example: 'https://example.com'
+          minLength: 1
+          maxLength: 256
+        - in: query
+          name: state
+          description: |
+                        ステート  
+                        利用者による認可が得られた場合、ステートをOIDC連携事業者に返却する。  
+                        OIDC連携事業者はAPI連携認証リクエスト時に送信したステートと同一か確認する。
+          required: false
+          type: string
+          format: "半角英数字記号"
+          x-example: '1111'
+          minLength: 1
+          maxLength: 256
+        - in: query
+          name: scope
+          description: |
+                        スコープ  
+                        以下を設定。  
+                        ・openid：OIDCサービス  
+                        
+                        ※「openid」の設定時には他スコープの設定不可  
+                        ※「openid」の設定時にはリフレッシュトークンの発行不可（都度利用者による認可が必要）
+          required: true
+          type: string
+          format: "半角英数字記号"
+          x-example: 'openid'
+        - in: query
+          name: nonce
+          description: |
+                        ナンス  
+                        IDトークン発行時に同一の値をOIDC連携事業者に返却する。  
+                        OIDC連携事業者はOIDC認証リクエスト時に送信したナンスの値とIDトークンに含まれるナンスの値が同一であることを確認する。
+          required: false
+          type: string
+          format: "半角英数字記号"
+          x-example: '1111'
+          minLength: 1
+          maxLength: 256
+        - in: query
+          name: max_age
+          description: |
+                        認証後最大許容時間  
+                        SSO連携において、明示的に認証されてからの経過時間の最大許容値(秒)。  
+                        最後に利用者が明示的に認証実施してから一定期間内は再認証不要とするが、本パラメータで指定された秒数が経過している場合は利用者に再認証を求める。  
+                        利用者の認証情報が不正な場合も再認証を行う。
+          required: false
+          type: integer
+          format: "半角数字"
+          x-example: '1'
+          minimum: 0
+          maximum: 99999
+        - in: query
+          name: bankauth
+          description: |
+                        スマートフォンアプリ認証  
+                        「on」を指定した場合、OIDC認証（スマホアプリ認証）画面に遷移する。
+          enum:
+           - 'on'
+          required: false
+          type: string
+          x-example: 'on'
+      responses:
+        '302':
+         description: Found
+         headers:
+           Location:
+             description: |
+                           利用者が認可した場合は、「 {リダイレクトURL}?code={認可コード}&state={ステート}」が設定される。  
+                           利用者が操作を中止した場合や、なんらかの異常が発生した場合は、「 {リダイレクトURL}?error={エラーコード}&error_description={エラーメッセージ}&state={ステート}」が設定される。
+             type: string
+  /banks/{bank_code}/oauth/token:
+    post:
+      tags: [OAuth]
+      summary: アクセストークン発行
+      description: アクセストークン・IDトークンを発行する。
+      operationId: token
+      consumes:
+        - application/x-www-form-urlencoded
+      produces:
+        - application/json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBasic'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - in: formData
+          name: grant_type
+          description: |
+                        グラントタイプ  
+                        authorization_codeを指定する。
+          required: true
+          type: string
+          x-example: 'authorization_code'
+          enum:
+            - 'authorization_code'
+        - in: formData
+          name: code
+          description: |
+                        認可コード
+          required: true
+          type: string
+          format: "半角英数字"
+          x-example: 'au5723130d3042eea0a6e6b7a97d0001'
+          minLength: 32
+          maxLength: 32
+        - in: formData
+          name: redirect_uri
+          description: |
+                        リダイレクトURL  
+                        OIDC認証で指定したリダイレクトURL。
+          required: true
+          type: string
+          format: "半角英数字記号"
+          x-example: 'https://example.com'
+          minLength: 1
+          maxLength: 256
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - access_token
+              - token_type
+              - expires_in
+              - id_token
+              - scope
+            properties:
+              access_token:
+                type: string
+                format: "半角英数字"
+                example: '7d0e8fddb23a40a2b5f73c2771e9c4c7'
+                description: |
+                              アクセストークン
+                x-nullable: false
+                minLength: 32
+                maxLength: 32
+              token_type:
+                type: string
+                example: 'Bearer'
+                description: |
+                              トークンタイプ  
+                              「Bearer」のみ設定する。
+                enum:
+                  - 'Bearer'
+                x-nullable: false
+              expires_in:
+                type: integer
+                example: 3600
+                description: |
+                              アクセストークン有効期間  
+                              秒数を設定する。
+                x-nullable: false
+                minimum: 1
+                maximum: 59940
+              scope:
+                type: string
+                format: "半角英数字記号"
+                example: 'openid'
+                description: |
+                              スコープ  
+                              認可時に複数業務が設定されている場合は、半角スペース区切りとする。また、設定値の順序に関係は無い。  
+                              ・openid：OIDCサービス
+                x-nullable: false
+              id_token:
+                type: string
+                format: "半角英数字記号"
+                example: 'eyJraWQiOiIxIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ.eyJzdWIiOiIxMjM0NTY3OCIsImF1ZCI6IjAwMDAwMDAwIiwiYXV0aF90aW1lIjoxNjgxODU1MjAwLCJpc3MiOiJodHRwczpcL1wvd3d3LmFwaWd3Lm9wZW5jYW52YXMubmUuanBcL3BhcmFzb2xcL3YxXC9iYW5rc1wvMDAwMSIsImV4cCI6MTY4MjMwNTQ3Niwibm9uY2UiOiJkNzk5OTYyYTY2NWQ0MGVlYWYzMDg1ZTM2MWUzODc2YSIsImlhdCI6MTY4MjMwNDU3NiwianRpIjoiYTk4NGRlZGUtNzE4My00Y2JmLTkwOWItN2E3MWEwZDRlMTMxIn0.dFauW3z9VKqnN95AFjeZ4BxpT1mqt06fb-YBv5Ht1lOA0n7DW_R4y-WE0omBIm4VXWsy647EkHloW8vWYghscg1_dIUZkNLqytQ8eFE1SNsSyau9ngN6LvO026aFS_MErGnGlKLo1ep3UIzcG9352QD0srXVuTxzKgtkqkZTC6qz8-hpkz1fwrKynIyZUPtIOR1mqcwPyIP6j9H8dgyHbinTrOryNYQ2VkYVo-BFOmmqKhn8CSGZEMFxRx-nM0uYmNim8gD4rAmVsxGlQgLvv_ua6QBcKuCvR5VoVTFl9zt6V3xcGrZperCk2U48nz02Y99ik0_p1nRYBEMt9Dxnfg'
+                description: |
+                              IDトークン
+                              利用者の認証・認可に関する情報を含む改ざん検知用の署名付きトークンを設定。  
+                              IDトークンは、ピリオド("．")で区切られた【ヘッダ】【ペイロード】【署名】の３要素で構成される。  
+                                
+                              【ヘッダ】：ヘッダをbase64urlエンコードして設定する。  
+                                ヘッダ（例)  
+                                { "typ":"JWT",  
+                                  "alg":"RS256",  
+                                  "kid":"1"  
+                                }  
+                              ・typ(必須): フォーマットタイプ ※"JWT"のみ設定  
+                              ・alg(必須): 署名アルゴリズム ※"RS256"のみ設定  
+                              ・kid(必須): 署名検証に用いる公開鍵のKeyID  
+                                
+                              【ペイロード】：ペイロードをbase64urlエンコードして設定する。  
+                                
+                                ペイロード（例)  
+                                {  
+                                  "iss":"https://www.apigw.opencanvas.ne.jp/parasol/v1/banks/9999",  
+                                  "sub":"1",  
+                                  "aud":"Finte001",  
+                                  "exp":1542156794,  
+                                  "iat":1542156674,  
+                                  "auth_time":1542153674,  
+                                  "nonce":"d799962a665d40eeaf3085e361e3876a"  
+                                }  
+                                
+                              ・iss(必須): IDトークン発行者(金融機関ごとに異なる)  
+                              ・sub(必須): 金融機関単位にユニークに発行されるユーザ識別子  
+                              ・aud(必須): IDトークン発行依頼者(クライアント識別子)  
+                              ・exp(必須): IDトークン有効期限(UNIX時間（UTC）としての秒数を表す数値)  
+                              ・iat(必須): IDトークン発行時刻(UNIX時間（UTC）としての秒数を表す数値)  
+                              ・auth_time(必須): 認証時間(UNIX時間（UTC）としての秒数を表す数値)  
+                              ・nonce(任意): ナンス  
+                                OIDC認証リクエストにノンスが指定された場合のみ、その値を設定  
+                                
+                              【署名】：  
+                                【ヘッダ】と【ペイロード】をピリオド("．")で連結した文字列を  
+                                「SHA-256」を利用した「RSASSA-PKCS1-v1_5(PKCS#1 v1.5(RSA))」方式で  
+                                署名を生成し、base64urlエンコードして設定する。  
+                x-nullable: true
+        '400':
+          description: 'Bad Request'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Basic認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Basic realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+  /banks/{bank_code}/oauth/revoke:
+    post:
+      tags: [OAuth]
+      summary: トークン失効
+      description: |
+                    トークンを失効させる。
+      operationId: revoke
+      consumes:
+        - application/x-www-form-urlencoded
+      produces:
+        - application/json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBasic'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+        - in: formData
+          name: token
+          description: |
+                        トークン  
+                        削除対象のアクセストークンを設定する。
+          required: true
+          type: string
+          format: "半角英数字"
+          x-example: 'ca5723130d3042eea0a6e6b7a97d0001'
+          minLength: 32
+          maxLength: 32
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: 'Bad Request'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Basic認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Basic realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC6749ErrorResponse'
+  /banks/{bank_code}/oauth/userinfo:
+    get:
+      tags: [openid]
+      summary: OIDC情報照会
+      description: |
+                    AnserParaSOL契約者の情報を照会する。  
+                    各応答項目にnullが設定される条件は以下のとおり。  
+                    ・金融機関の設定や契約者情報の登録状態によりデータが存在しない場合  
+                    ・金融機関よりデータ提供を許可されていない場合
+      operationId: getUserInfo
+      produces:
+        - application/json;charset=UTF-8
+        - application/problem+json;charset=UTF-8
+      parameters:
+        - $ref: '#/parameters/AuthorizationHeaderBearer'
+        - $ref: '#/parameters/XFFHeader'
+        - $ref: '#/parameters/BankCodePath'
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: object
+            required:
+              - sub
+              - zoneinfo
+              - locale
+              - name
+              - kana_name
+              - email
+              - email_verified
+              - phone_number
+              - phone_number_verified
+              - main_account
+            properties:
+              sub:
+                type: string
+                format: "半角数字"
+                example: '12345678'
+                description: |
+                              ユーザ識別子
+                x-nullable: false
+                minLength: 1
+                maxLength: 8
+              zoneinfo:
+                type: string
+                example: 'Asia/Tokyo'
+                description: |
+                              タイムゾーン
+                x-nullable: false
+                enum:
+                  - 'Asia/Tokyo'
+              locale:
+                type: string
+                example: 'ja-JP'
+                description: |
+                              ロケール
+                x-nullable: false
+                enum:
+                  - 'ja-JP'
+              email:
+                type: string
+                format: "半角英数字記号"
+                example: 'abcd1234@example.com'
+                description: |
+                              メールアドレス
+                x-nullable: true
+                minLength: 1
+                maxLength: 64
+              email_verified:
+                type: boolean
+                example: true
+                description: |
+                              メールアドレス検証状態  
+                              稼動中(現在のメールアドレスは有効)：true  
+                              停止中(現在のメールアドレスは無効)：false
+                x-nullable: true
+              phone_number:
+                type: string
+                format: "半角数字および-(半角ハイフン)"
+                example: '03-3000-1234'
+                description: |
+                              電話番号
+                x-nullable: true
+                minLength: 1
+                maxLength: 20
+              phone_number_verified:
+                type: boolean
+                example: true
+                description: |
+                              電話番号検証状態  
+                              稼動中(現在の連絡先電話番号は有効)：true  
+                              停止中(現在の連絡先電話番号は無効)：false
+                x-nullable: true
+              name:
+                type: string
+                format: "全角（漢字情報あり）英数字記号"
+                example: '試験　太郎'
+                description: |
+                              漢字氏名
+                x-nullable: true
+                minLength: 1
+                maxLength: 30
+              kana_name:
+                type: string
+                format: "半角英数字記号"
+                example: 'ｼｹﾝ ﾀﾛｳ'
+                description: |
+                              カナ氏名
+                x-nullable: true
+                minLength: 1
+                maxLength: 60
+              main_account:
+                type: object
+                description: |
+                              代表口座
+                required:
+                  - branch_code
+                  - branch_name
+                  - account_type_code
+                  - account_type
+                  - account_number
+                properties:
+                  branch_code:
+                    type: string
+                    format: "半角数字"
+                    example: '115'
+                    description: |
+                                  支店コード
+                    x-nullable: false
+                    minLength: 3
+                    maxLength: 3
+                  branch_name:
+                    type: string
+                    format: "全角（漢字情報あり）半角英数字記号"
+                    example: '本店営業部'
+                    description: |
+                                  支店名
+                    x-nullable: false
+                    minLength: 1
+                    maxLength: 30
+                  account_type_code:
+                    type: string
+                    format: "半角数字"
+                    example: '1'
+                    description: |
+                                  預金種目コード
+                    x-nullable: false
+                    minLength: 1
+                    maxLength: 1
+                  account_type:
+                    type: string
+                    format: "全角（漢字情報あり）半角英数字記号"
+                    example: '普通'
+                    description: |
+                                  預金種目名
+                    x-nullable: false
+                    minLength: 1
+                    maxLength: 10
+                  account_number:
+                    type: string
+                    format: "半角数字"
+                    example: '1234567'
+                    description: |
+                                  口座番号
+                    x-nullable: false
+                    minLength: 1
+                    maxLength: 7
+        '400':
+          description: 'Bad Request'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '401':
+          description: 'Unauthorized'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '403':
+          description: 'Forbidden'
+          headers:
+            WWW-Authenticate:
+              description: |
+                            Bearer認証でエラーとなった場合、ヘッダにWWW-Authenticateが設定される。realmはParaSOL-APIのルートが設定される。  
+                            Bearer realm="example",error="invalid_client"
+              type: string
+              format: "半角英数字記号"
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '500':
+          description: 'Internal Server Error'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '503':
+          description: 'Service Unavailable'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+        '504':
+          description: 'Gateway Timeout'
+          schema:
+            $ref: '#/definitions/RFC7807ErrorResponse'
+parameters:
+  AuthorizationHeaderBasic:
+    in: header
+    name: Authorization
+    description: |
+                  クライアント識別子・パスワード  
+                  Basic認証  
+                  クライアント識別子とクライアントパスワードをBASE64でエンコードした値を設定する。
+    required: true
+    type: string
+    format: "半角英数字記号"
+    x-example: 'Basic MDAxOnBhc3MwMDE='
+  AuthorizationHeaderBearer:
+    in: header
+    name: Authorization
+    description: |
+                   アクセストークン  
+                   アクセストークンをBearer認証の形で設定する。
+    type: string
+    format: "半角英数字記号"
+    required: true
+    x-example: 'Bearer ca5723130d3042eea0a6e6b7a97d0100'
+  XFFHeader:
+    in: header
+    name: X-Forwarded-For
+    description: |
+                   X-Forwarded-For  
+                   先頭に利用者端末のIPアドレス(v4)を設定する。 
+    type: string
+    format: "半角数字記号"
+    required: false
+    x-example: '192.168.0.1, 192.168.0.2'
+  BankCodePath:
+    in: path
+    name: bank_code
+    description: |
+                  金融機関コード
+    required: true
+    type: string
+    format: "半角数字"
+    x-example: '0001'
+    minLength: 4
+    maxLength: 4
+definitions:
+  RFC6749ErrorResponse:
+    type: object
+    required:
+      - error
+      - error_description
+    properties:
+      error:
+        type: string
+        example: 'invalid_request'
+        description: エラーコード
+        x-nullable: false
+      error_description:
+        type: string
+        example: 'invalid parameters requested.'
+        description: エラーメッセージ
+        x-nullable: true
+  RFC7807ErrorResponse:
+    type: object
+    required:
+      - type
+      - title
+      - detail
+    properties:
+      type:
+        type: string
+        format: "半角英数字記号"
+        example: 'about:blank'
+        description: |
+                      エラー種別  
+                      現在は一律で'about:blank'を出力する。
+        x-nullable: false
+      title:
+        type: string
+        format: "半角英数字記号"
+        example: 'invalid_request'
+        description: エラーコード
+        x-nullable: false
+      detail:
+        type: string
+        format: "半角英数字記号"
+        example: 'invalid parameters requested.'
+        description: エラーメッセージ
+        x-nullable: true
