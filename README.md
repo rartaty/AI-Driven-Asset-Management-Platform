@@ -30,6 +30,33 @@
 - **Secret Management**: AWS Systems Manager (SSM) Parameter Store + KMS 暗号化
 - **Infrastructure**: ローカル PC 上で直接稼働。将来的にコンテナ化（Podman / Docker Compose）を予定
 
+## ディレクトリ構成 (Project Structure)
+関心の分離を意識した構成で、バックエンド／フロントエンド／ドキュメント／運用スクリプトを明確に切り分けています。
+
+```
+.
+├── backend/                  # Python 3.11 / FastAPI バックエンド
+│   ├── src/
+│   │   ├── api/              # 証券・銀行 API クライアント (kabu STATION / OpenCanvas / EDINET)
+│   │   ├── core/             # SSM / KMS / Kill Switch / Discord 通知 / Logger
+│   │   ├── models/           # SQLAlchemy 2.0 スキーマ・DB セッション
+│   │   ├── routers/          # FastAPI ルーター (analytics / portfolio / reports / system)
+│   │   ├── runner/           # 本番稼働エントリ + バックテスト
+│   │   ├── services/         # スケジューラ / ポートフォリオ同期 / 市場データ / AI 解析
+│   │   └── strategy/         # 取引戦略 ([PROPRIETARY LOGIC REDACTED])
+│   └── tests/                # pytest テストスイート
+├── frontend/                 # Next.js 16 / React 19 ダッシュボード
+│   └── src/
+│       ├── app/              # App Router ページ (dashboard / reports)
+│       └── components/       # 再利用可能 UI コンポーネント
+├── docs/                     # 要件・ADR・運用 Runbook
+│   ├── adr/                  # アーキテクチャ意思決定記録
+│   ├── architecture/         # 設計ドキュメント
+│   ├── operations/           # SLI/SLO・インシデント対応・キルスイッチ仕様
+│   └── runbooks/             # 障害対応 Runbook (RB-001〜010)
+└── scripts/                  # シークレット読込・DB バックアップ等
+```
+
 ## インフラとセキュリティ・セーフティ設計 (Security & Safe Design)
 個人の重要な金融資産を自動で扱うため、システムは何よりも「安全性（資金を守ること）」を最優先に設計しました。
 
