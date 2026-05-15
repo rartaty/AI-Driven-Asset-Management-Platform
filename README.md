@@ -37,7 +37,7 @@
 .
 ├── backend/                  # Python 3.11 / FastAPI バックエンド
 │   ├── src/
-│   │   ├── api/              # 証券・銀行 API クライアント (kabu STATION / OpenCanvas / EDINET)
+│   │   ├── api/              # 証券・銀行 API クライアント
 │   │   ├── core/             # SSM / KMS / Kill Switch / Discord 通知 / Logger
 │   │   ├── models/           # SQLAlchemy 2.0 スキーマ・DB セッション
 │   │   ├── routers/          # FastAPI ルーター (analytics / portfolio / reports / system)
