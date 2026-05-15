@@ -171,20 +171,6 @@ def check_drawdown_and_trigger(session: Session, lookback_days: int = 30) -> boo
     if settings.is_kill_switch_active:
         return False  # 既発動なら何もしない
 
-    # 1. 生活防衛費の保護チェック (M2)
-    latest_snapshot = session.query(Daily_Asset_Snapshot).order_by(Daily_Asset_Snapshot.date.desc()).first()
-    if latest_snapshot and latest_snapshot.bank_balance is not None:
-        try:
-            living_expenses_threshold = int(os.getenv("LIVING_EXPENSES_THRESHOLD", "1000000"))
-        except ValueError:
-            living_expenses_threshold = 1000000
-            
-        if latest_snapshot.bank_balance < living_expenses_threshold:
-            reason = f"bank_balance ({latest_snapshot.bank_balance:,}) < living expenses threshold ({living_expenses_threshold:,})"
-            activate(session, reason=reason, manual=False)
-            return True
-
-    # 2. ドローダウン計算
     report = compute_drawdown(session, lookback_days=lookback_days)
     if report is None:
         return False

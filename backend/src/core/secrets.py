@@ -20,6 +20,7 @@ _KEY_MAPPING = {
     "DISCORD_WEBHOOK_ALERTS": "/projectbig/discord/webhook-alerts",
     "EDINET_API_KEY": "/projectbig/edinet/api-key",
     "ANTHROPIC_API_KEY": "/projectbig/anthropic/api-key",
+    "ADMIN_API_TOKEN": "/projectbig/admin/api-token",  # Web 管理者トークン (WAF 監査 C3 / 要件 E.5.1)
 }
 
 def get_secret(logical_key: str) -> str:
